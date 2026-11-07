@@ -1,5 +1,6 @@
 // Bookworm server: serves the page, keeps accounts and games, and proxies book lookups to Open Library.
-// No dependencies. Everything lives in one file: DATA_DIR/data.json (see load/save).
+// No dependencies. Everything lives in one file: DATA_DIR/data.json (see load/save). The copies the server takes of it
+// on its own (at every start, hourly, and before anything is removed) are in DATA_DIR/backups/ (see the backups section).
 //
 // Roles, lowest to highest: player < gamemaster < keeper < master.
 //   gamemaster: manages the shared tile pool and can promote players to Gamemaster.
@@ -43,6 +44,67 @@ const DEFAULT_TILES = [
   'A book about books or reading',
 ];
 
+// ---------- backups ----------
+// Copies of data.json in DATA_DIR/backups, named data-<time>[-startup|-pre-delete].json (the time is an ISO date with no
+// colons): one at every start (unless the file is just as the last start found it), one an hour while the data changes,
+// and one just before a game is deleted, a reader leaves a game, or an account is removed. Of each kind the newest KEEP
+// are kept, and so is the newest of every day (UTC) for KEEP_DAYS days, so a burst of copies (a server restarting over
+// and over) can't push out all the older good ones. This sits above load(), which takes the copy made at every start.
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const BACKUP_NAME = /^data-(\d{4}-\d\d-\d\dT\d\d-\d\d-\d\d\.\d{3}Z)(?:-(startup|pre-delete))?\.json$/;
+const KEEP = { '': 72, startup: 20, 'pre-delete': 20 };
+const KEEP_DAYS = 30;
+// The name for a copy made now. Two in the same millisecond must not share one, or the second would replace the first.
+function backupName(kind) {
+  for (let t = Date.now(); ; t++) {
+    const name = 'data-' + new Date(t).toISOString().replace(/:/g, '-') + (kind ? '-' + kind : '') + '.json';
+    if (!fs.existsSync(path.join(BACKUP_DIR, name))) return name;
+  }
+}
+// The copies on disk, newest first. `day` is the date in the name, like 2026-11-07.
+function backupFiles() {
+  let names = [];
+  try { names = fs.readdirSync(BACKUP_DIR); } catch { /* none yet */ }
+  return names.map((name) => { const m = BACKUP_NAME.exec(name); return m && { name, at: m[1], kind: m[2] || '', day: m[1].slice(0, 10) }; })
+    .filter(Boolean).sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : a.name < b.name ? 1 : -1));
+}
+// Restarted over and over (a crash loop, say), the server mustn't fill the folder with copies of the same file: is
+// `bytes` exactly what the newest startup copy holds?
+function sameAsLastStartup(bytes) {
+  const last = backupFiles().find((f) => f.kind === 'startup');
+  try { return !!last && bytes.equals(fs.readFileSync(path.join(BACKUP_DIR, last.name))); } catch { return false; }
+}
+// Removes the copies of one kind that aren't among the newest KEEP of it, or the newest of a day in the last KEEP_DAYS.
+function prune(kind) {
+  const since = new Date(Date.now() - KEEP_DAYS * 864e5).toISOString().slice(0, 10), days = new Set();
+  backupFiles().filter((f) => f.kind === kind).forEach((f, i) => {
+    const newestOfDay = !days.has(f.day);
+    days.add(f.day);
+    if (i < KEEP[kind] || (newestOfDay && f.day >= since)) return;
+    try { fs.unlinkSync(path.join(BACKUP_DIR, f.name)); } catch { /* already gone */ }
+  });
+}
+// kind: '' for the hourly copy, 'startup' or 'pre-delete'; data is the text (or bytes) to keep. A copy that can't be made
+// is reported but never stops the server, or the change that was about to be made.
+function backup(kind, data) {
+  try {
+    const bytes = Buffer.from(data);
+    fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 });
+    if (kind === 'startup' && sameAsLastStartup(bytes)) return true;
+    writeFileSafely(path.join(BACKUP_DIR, backupName(kind)), bytes);
+    prune(kind);
+    return true;
+  } catch (e) {
+    console.error(`Couldn't write a backup: ${e.message}`);
+    return false;
+  }
+}
+// Starting with nothing where there should be data is how a site loses everything, so this is hard to miss.
+function loud(lines) {
+  const bar = '!'.repeat(78);
+  console.warn([bar, ...lines, bar].join('\n'));
+}
+
 // ---------- storage ----------
 const dict = (o = {}) => Object.assign(Object.create(null), o);
 const tokenKey = (token) => crypto.createHash('sha256').update(token).digest('hex');
@@ -55,9 +117,20 @@ function emptyData() {
 }
 function load() {
   fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
-  if (!fs.existsSync(DATA_FILE)) return emptyData();
+  if (!fs.existsSync(DATA_FILE)) {
+    const newest = backupFiles()[0];
+    if (newest) {
+      loud([`${DATA_FILE} is missing, but ${BACKUP_DIR} has copies of it.`,
+        `The newest is ${newest.name}. Nothing has been restored: the server is starting with no accounts and no games.`,
+        `To restore it, stop the server and copy that file over ${DATA_FILE}.`]);
+    }
+    return emptyData();
+  }
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    const bytes = fs.readFileSync(DATA_FILE);
+    const data = JSON.parse(bytes.toString('utf8'));
+    backup('startup', bytes); // the file as it was found: nothing below has changed or saved it yet
+    return data;
   } catch (e) {
     // Never replace an unreadable file with an empty one: keep a copy and stop, so nothing is overwritten.
     const copy = DATA_FILE + '.unreadable-' + Date.now();
@@ -86,12 +159,28 @@ function pruneSessions() {
   return n;
 }
 pruneSessions();
-function save() {
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, DATA_FILE);
+// What the server holds now, as save() writes it (and as the hourly and pre-delete backups keep it).
+const dumpData = () => JSON.stringify(db, null, 2);
+// Written to a temporary file first and flushed to disk before it replaces the old one, so a crash or a power cut in
+// the middle of a write never leaves half a file. Only this server can read the result.
+function writeFileSafely(file, data) {
+  const tmp = file + '.tmp', buf = Buffer.from(data);
+  const fd = fs.openSync(tmp, 'w', 0o600);
+  try {
+    let at = 0;
+    while (at < buf.length) at += fs.writeSync(fd, buf, at, buf.length - at);
+    fs.fsyncSync(fd);
+  } finally { fs.closeSync(fd); }
+  fs.renameSync(tmp, file);
 }
+function save() { writeFileSafely(DATA_FILE, dumpData()); }
 save();
+// Every hour, a copy of the data if anything has changed since the last one (the copy made at the start counts as one).
+let snapped = dumpData();
+setInterval(() => {
+  const text = dumpData();
+  if (text !== snapped && backup('', text)) snapped = text;
+}, 3600e3).unref();
 
 // ---------- helpers ----------
 function newId() { return crypto.randomBytes(9).toString('base64url'); }
@@ -439,6 +528,7 @@ async function api(req, res, url) {
     needMaster();
     const u = db.users[parts[1]] || fail(404, 'No such account');
     if (u.role === 'master') fail(400, 'The master account cannot be removed');
+    backup('pre-delete', dumpData());
     delete db.users[u.id];
     for (const [t, s] of Object.entries(db.sessions)) if (s.userId === u.id) delete db.sessions[t];
     for (const g of Object.values(db.games)) delete g.players[u.id];
@@ -516,6 +606,7 @@ async function api(req, res, url) {
     const g = db.games[parts[1]];
     if (!g || !canView(g, me)) fail(404, 'Game not found');
     if (g.creatorId !== me.id && me.role !== 'master') fail(403, 'Only the creator or the master can delete a game');
+    backup('pre-delete', dumpData());
     delete db.games[g.id];
     db.invites = db.invites.filter((i) => i.gameId !== g.id);
     save();
@@ -633,10 +724,12 @@ async function api(req, res, url) {
     need();
     const g = db.games[parts[1]];
     if (!g || !isMember(g, me)) fail(404, 'Game not found');
+    backup('pre-delete', dumpData());
     delete g.players[me.id]; save();
     return send(res, 200, { ok: true });
   }
   // Set or clear one of your own squares. status: "read" (only while the game is active), "planned", or null to clear.
+  // Clearing has to be asked for outright: a request with no status at all is turned away, not taken as a clear.
   if (method === 'POST' && parts[0] === 'games' && parts[2] === 'squares' && parts.length === 4) {
     need();
     const g = db.games[parts[1]];
@@ -646,7 +739,7 @@ async function api(req, res, url) {
     const player = g.players[me.id];
     const status = gameStatus(g);
     if (status === 'ended') fail(400, 'This game has ended');
-    if (body.status === null || body.status === undefined) {
+    if (body.status === null) {
       delete player.squares[tileId];
     } else {
       if (!['read', 'planned'].includes(body.status)) fail(400, 'Bad status');

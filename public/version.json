@@ -1,6 +1,13 @@
 {
-  "version": "v0.0.0.6",
+  "version": "v0.0.0.7",
   "history": [
+    {
+      "version": "v0.0.0.7",
+      "date": "2026-11-07",
+      "notes": [
+        "Fixed: games with more than one reader would not open"
+      ]
+    },
     {
       "version": "v0.0.0.6",
       "date": "2026-11-07",

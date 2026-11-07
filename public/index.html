@@ -845,7 +845,7 @@ function drawGame() {
     </aside>
   </div>
   ${others.length ? `<section class="others"><h3>Other readers' cards</h3>
-    <div class="others-grid">${others.map(otherHTML).join('')}</div></section>` : ''}`;
+    <div class="others-grid">${others.map((p) => otherHTML(p)).join('')}</div></section>` : ''}`;
 
   if (mine) $('#board').querySelectorAll('.tile[data-tile]').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
   fitReaders();

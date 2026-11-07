@@ -2,7 +2,7 @@ FROM node:22-alpine
 WORKDIR /app
 COPY server.js ./
 COPY public/ ./public/
-ENV PORT=8080 DATA_DIR=/data NODE_ENV=production
+ENV PORT=8080 DATA_DIR=/data NODE_ENV=production MASTER_USERNAME=Mentdown1
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

@@ -1,8 +1,11 @@
 // Bookworm server: serves the page, keeps accounts and games, and proxies book lookups to Open Library.
 // No dependencies. Everything lives in one file: DATA_DIR/data.json (see load/save).
 //
-// Roles: the first account ever registered is the master (can do everything, including demoting Gamemasters and
-// removing accounts or games). Gamemasters manage the shared tile pool and can promote other accounts to Gamemaster.
+// Roles, lowest to highest: player < gamemaster < keeper < master.
+//   gamemaster: manages the shared tile pool and can promote players to Gamemaster.
+//   keeper:     everything a Gamemaster can do, plus resetting the passwords of players and Gamemasters.
+//   master:     everything; the only one who can make or remove Keepers, demote, remove accounts, and reset
+//               Keeper or master passwords. The first account registered (or MASTER_USERNAME, if set) is the master.
 'use strict';
 const http = require('http');
 const fs = require('fs');
@@ -134,7 +137,8 @@ async function hashPassword(pw, salt = crypto.randomBytes(16).toString('hex')) {
 }
 
 function publicUser(u) {
-  return u && { id: u.id, username: u.username, role: u.role, isGM: u.role !== 'player', isMaster: u.role === 'master' };
+  return u && { id: u.id, username: u.username, role: u.role, isGM: u.role !== 'player',
+    isKeeper: u.role === 'keeper' || u.role === 'master', isMaster: u.role === 'master' };
 }
 function isMember(g, u) { return !!g.players[u.id]; }
 function canView(g, u) { return isMember(g, u) || u.role === 'master'; }
@@ -328,6 +332,7 @@ async function api(req, res, url) {
   const me = currentUser(req);
   const need = () => me || fail(401, 'Please sign in');
   const needGM = () => (need().role !== 'player' ? me : fail(403, 'Gamemasters only'));
+  const needKeeper = () => (['keeper', 'master'].includes(need().role) ? me : fail(403, 'Keepers only'));
   const needMaster = () => (need().role === 'master' ? me : fail(403, 'Master account only'));
 
   // --- accounts ---
@@ -387,11 +392,12 @@ async function api(req, res, url) {
     if (u.role === 'player') { u.role = 'gamemaster'; save(); }
     return send(res, 200, { user: publicUser(u) });
   }
-  // A Gamemaster sets a new password for someone (only the master may reset the master's). They are signed out everywhere.
+  // A Keeper sets a new password for a player or Gamemaster; only the master may reset a Keeper's or the master's.
+  // The account is signed out everywhere.
   if (route === 'POST /users/:id/password') {
-    needGM();
+    needKeeper();
     const u = db.users[parts[1]] || fail(404, 'No such account');
-    if (u.role === 'master' && me.role !== 'master') fail(403, "Only the master can reset the master's password");
+    if ((u.role === 'keeper' || u.role === 'master') && me.role !== 'master') fail(403, "Only the master can reset a Keeper's password");
     const password = typeof body.password === 'string' ? body.password : '';
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
     Object.assign(u, await hashPassword(password));
@@ -400,10 +406,18 @@ async function api(req, res, url) {
     save();
     return send(res, 200, { ok: true });
   }
+  // Demote steps one rank down: Keeper -> Gamemaster -> player. Master only.
   if (route === 'POST /users/:id/demote') {
     needMaster();
     const u = db.users[parts[1]] || fail(404, 'No such account');
-    if (u.role === 'gamemaster') { u.role = 'player'; save(); }
+    const down = { keeper: 'gamemaster', gamemaster: 'player' }[u.role];
+    if (down) { u.role = down; save(); }
+    return send(res, 200, { user: publicUser(u) });
+  }
+  if (route === 'POST /users/:id/keeper') {
+    needMaster();
+    const u = db.users[parts[1]] || fail(404, 'No such account');
+    if (u.role === 'player' || u.role === 'gamemaster') { u.role = 'keeper'; save(); }
     return send(res, 200, { user: publicUser(u) });
   }
   if (route === 'DELETE /users/:id') {

@@ -1,6 +1,16 @@
 {
-  "version": "v0.0.0.5",
+  "version": "v0.0.0.6",
   "history": [
+    {
+      "version": "v0.0.0.6",
+      "date": "2026-11-07",
+      "notes": [
+        "New Keeper role: everything a Gamemaster can do, plus resetting the passwords of readers and Gamemasters",
+        "Gamemasters no longer reset passwords; only the master can make Keepers or reset a Keeper's password",
+        "Demote now steps down one rank (Keeper → Gamemaster → reader)",
+        "Docker image pins the master account to Mentdown1"
+      ]
+    },
     {
       "version": "v0.0.0.5",
       "date": "2026-11-07",

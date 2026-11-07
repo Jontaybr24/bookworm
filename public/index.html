@@ -162,6 +162,7 @@ input:focus, textarea:focus, .btn:focus-visible, .tile:focus-visible { outline: 
 .stamp.active { color: var(--forest); }
 .stamp.upcoming { color: var(--navy); }
 .stamp.ended { color: var(--ink-soft); }
+.stamp.keeper { color: var(--oxblood); }
 
 /* ---------- auth ---------- */
 .auth { max-width: 420px; margin: 30px auto; }
@@ -456,7 +457,7 @@ function renderUserbar() {
   const bar = $('#userbar');
   if (!me) { bar.hidden = true; bar.innerHTML = ''; return; }
   bar.hidden = false;
-  const role = me.isMaster ? 'Master' : me.isGM ? 'Gamemaster' : '';
+  const role = me.isMaster ? 'Master' : me.isKeeper ? 'Keeper' : me.isGM ? 'Gamemaster' : '';
   bar.innerHTML = `<span class="who">Reading as <b>${esc(me.username)}</b>${role ? `<span class="role">${role}</span>` : ''}</span>
     <a class="btn ghost sm" href="#/">Games</a>
     ${me.isGM ? '<a class="btn ghost sm" href="#/gm">Gamemaster</a>' : ''}
@@ -1002,11 +1003,12 @@ async function renderGM() {
     </section>
     <section class="paper">
       <h2>Readers</h2>
-      <p class="muted small">Gamemasters can promote readers to Gamemaster.${me.isMaster ? ' As master you can also demote Gamemasters and remove accounts.' : ''}</p>
-      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isGM ? '<span class="stamp upcoming">Gamemaster</span>' : ''}</span>
+      <p class="muted small">Gamemasters can promote readers to Gamemaster. Keepers can also reset the passwords of readers and Gamemasters.${me.isMaster ? ' As master you alone can make Keepers, demote, remove accounts, and reset Keeper passwords.' : ''}</p>
+      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isKeeper ? '<span class="stamp keeper">Keeper</span>' : u.isGM ? '<span class="stamp upcoming">Gamemaster</span>' : ''}</span>
         ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make Gamemaster</button>` : ''}
-        ${!u.isMaster || me.isMaster ? `<button class="btn ghost sm" data-resetpw="${esc(u.id)}" data-name="${esc(u.username)}">Reset password</button>` : ''}
-        ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}">Demote</button>` : ''}
+        ${me.isMaster && !u.isKeeper ? `<button class="btn sm" data-keeper="${esc(u.id)}">Make Keeper</button>` : ''}
+        ${me.isKeeper && (!u.isKeeper || me.isMaster) ? `<button class="btn ghost sm" data-resetpw="${esc(u.id)}" data-name="${esc(u.username)}">Reset password</button>` : ''}
+        ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}" title="${u.isKeeper ? 'Back to Gamemaster' : 'Back to reader'}">Demote</button>` : ''}
         ${me.isMaster && !u.isMaster ? `<button class="btn danger sm" data-remove="${esc(u.id)}" data-name="${esc(u.username)}">Remove</button>` : ''}
       </li>`).join('')}</ul>
     </section>
@@ -1022,6 +1024,7 @@ async function renderGM() {
     try {
       if (b.dataset.del) await api('/tiles/' + b.dataset.del, { method: 'DELETE' });
       else if (b.dataset.promote) await api(`/users/${b.dataset.promote}/promote`, { method: 'POST' });
+      else if (b.dataset.keeper) await api(`/users/${b.dataset.keeper}/keeper`, { method: 'POST' });
       else if (b.dataset.resetpw) { openResetPassword(b.dataset.resetpw, b.dataset.name); return; }
       else if (b.dataset.demote) await api(`/users/${b.dataset.demote}/demote`, { method: 'POST' });
       else if (b.dataset.remove) {

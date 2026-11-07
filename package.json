@@ -6,6 +6,6 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server.js",
-    "dev": "PORT=3000 node server.js"
+    "dev": "PORT=3000 MASTER_USERNAME=Mentdown1 node server.js"
   }
 }

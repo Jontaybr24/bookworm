@@ -232,6 +232,12 @@ input:focus, textarea:focus, .btn:focus-visible, .tile:focus-visible { outline: 
 .tile.planned .flag { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--ink-soft); }
 .tile.planned .topic { align-items: flex-start; padding-top: 12px; }
 .tile.read .topic { display: none; }
+.tile.free { cursor: default; background: radial-gradient(circle at 50% 40%, #fff6dc, #ecd9a8); border: 1px solid var(--brass); }
+.tile.free:hover { transform: none; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
+.tile.free .topic { flex-direction: column; gap: 2px; }
+.free-mark { font-family: 'Abril Fatface', var(--display); font-weight: 400; font-size: clamp(16px, 2vw, 28px); color: var(--oxblood); letter-spacing: .04em; }
+.free-sub { font-family: var(--display); font-size: clamp(10px, 1vw, 14px); text-transform: uppercase; letter-spacing: .14em; color: var(--ink-soft); }
+.mini-board .free .noimg { background: #ecd9a8; color: var(--oxblood); font-weight: 700; letter-spacing: .05em; }
 .tile.shelf { box-shadow: 0 0 0 3px var(--brass), 0 4px 10px rgba(0,0,0,.25); }
 .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: 15px; color: var(--ink-soft); }
 .legend span::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
@@ -384,7 +390,7 @@ const LINES = (() => {
   return L;
 })();
 function shelfPositions(player) {
-  const read = (p) => player.squares[player.order[p]]?.status === 'read';
+  const read = (p) => player.order[p] === null || player.squares[player.order[p]]?.status === 'read';
   const set = new Set();
   LINES.filter((l) => l.every(read)).forEach((l) => l.forEach((p) => set.add(p)));
   return set;
@@ -454,8 +460,58 @@ function renderUserbar() {
   bar.innerHTML = `<span class="who">Reading as <b>${esc(me.username)}</b>${role ? `<span class="role">${role}</span>` : ''}</span>
     <a class="btn ghost sm" href="#/">Games</a>
     ${me.isGM ? '<a class="btn ghost sm" href="#/gm">Gamemaster</a>' : ''}
+    <button class="btn ghost sm" id="chpw">Password</button>
     <button class="btn ghost sm" id="logout">Sign out</button>`;
+  $('#chpw').onclick = openChangePassword;
   $('#logout').onclick = async () => { await api('/logout', { method: 'POST' }).catch(() => {}); me = null; renderUserbar(); location.hash = '#/login'; };
+}
+
+function openChangePassword() {
+  const modal = openModal(`<p class="eyebrow">Your account</p><h2>Change password</h2>
+    <form id="pwForm">
+      <div class="field"><label for="cur">Current password</label><input type="password" id="cur" autocomplete="current-password" required></div>
+      <div class="field"><label for="npw">New password</label><input type="password" id="npw" autocomplete="new-password" minlength="6" required></div>
+      <div class="field"><label for="npw2">New password again</label><input type="password" id="npw2" autocomplete="new-password" required></div>
+      <p class="error" id="err"></p>
+      <button class="btn primary" type="submit">Change password</button>
+    </form>`);
+  $('#cur', modal).focus();
+  $('#pwForm', modal).onsubmit = async (e) => {
+    e.preventDefault();
+    if ($('#npw', modal).value !== $('#npw2', modal).value) { $('#err', modal).textContent = "The new passwords don't match"; return; }
+    try {
+      await api('/me/password', { method: 'POST', body: { current: $('#cur', modal).value, password: $('#npw', modal).value } });
+      closeModal(); toast('Password changed');
+    } catch (err) { $('#err', modal).textContent = err.message; }
+  };
+}
+function tempPassword() {
+  const words = ['quill', 'folio', 'shelf', 'spine', 'ink', 'vellum', 'chapter', 'margin', 'index', 'atlas', 'novel', 'fable'];
+  const pick = () => words[crypto.getRandomValues(new Uint32Array(1))[0] % words.length];
+  return `${pick()}-${pick()}-${100 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900)}`;
+}
+function openResetPassword(id, name) {
+  const modal = openModal(`<p class="eyebrow">Gamemaster</p><h2>Reset ${esc(name)}'s password</h2>
+    <p class="muted small">They'll be signed out everywhere. Give them the new password so they can sign in, then they can change it under <b>Password</b>.</p>
+    <form id="rpForm">
+      <div class="field"><label for="rpw">New password</label>
+        <div class="row" style="flex-wrap:nowrap"><input type="text" id="rpw" minlength="6" required autocomplete="off" value="${esc(tempPassword())}">
+        <button type="button" class="btn sm" id="regen" title="Suggest another">New</button></div></div>
+      <p class="error" id="err"></p>
+      <button class="btn primary" type="submit">Reset password</button>
+    </form>`);
+  $('#regen', modal).onclick = () => { $('#rpw', modal).value = tempPassword(); };
+  $('#rpForm', modal).onsubmit = async (e) => {
+    e.preventDefault();
+    const pw = $('#rpw', modal).value;
+    try {
+      await api(`/users/${id}/password`, { method: 'POST', body: { password: pw } });
+      modal.innerHTML = `<button class="close" aria-label="Close">×</button><p class="eyebrow">Done</p><h2>Password reset</h2>
+        <p>${esc(name)}'s new password is:</p><p class="code-box"><code style="letter-spacing:.04em">${esc(pw)}</code></p>
+        <p class="muted small">This is the only time it's shown.</p>`;
+      $('.close', modal).onclick = closeModal;
+    } catch (err) { $('#err', modal).textContent = err.message; }
+  };
 }
 
 // ---------- router ----------
@@ -630,7 +686,7 @@ async function renderCreate(panel) {
         <div class="field"><label for="gend">Ends</label><input type="date" id="gend" value="${isoDate(end)}" required></div>
       </div>
       <div class="field">
-        <label>Tiles from the library <span class="muted small" style="font-weight:400">— pick up to 25; any spaces left are filled at random</span></label>
+        <label>Tiles from the library <span class="muted small" style="font-weight:400">— pick up to 24 (the middle is a free space); any left over are drawn at random</span></label>
         <div class="picker" id="picker">${tiles.map((t) => `<label><input type="checkbox" value="${esc(t.id)}"> ${esc(t.text)}</label>`).join('')}</div>
       </div>
       <div class="field">
@@ -644,8 +700,8 @@ async function renderCreate(panel) {
   const count = () => {
     const n = panel.querySelectorAll('#picker input:checked').length + $('#custom').value.split('\n').filter((l) => l.trim()).length;
     const c = $('#counter');
-    c.textContent = n > 25 ? `${n} tiles chosen — remove ${n - 25}` : `${n} of 25 chosen${n < 25 ? ` · ${25 - n} will be drawn at random` : ''}`;
-    c.classList.toggle('over', n > 25);
+    c.textContent = n > 24 ? `${n} tiles chosen — remove ${n - 24}` : `${n} of 24 chosen${n < 24 ? ` · ${24 - n} will be drawn at random` : ''} · plus the free space`;
+    c.classList.toggle('over', n > 24);
   };
   panel.addEventListener('input', count); count();
   $('#createForm').onsubmit = async (e) => {
@@ -790,7 +846,7 @@ function drawGame() {
   ${others.length ? `<section class="others"><h3>Other readers' cards</h3>
     <div class="others-grid">${others.map(otherHTML).join('')}</div></section>` : ''}`;
 
-  if (mine) $('#board').querySelectorAll('.tile').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
+  if (mine) $('#board').querySelectorAll('.tile[data-tile]').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
   fitReaders();
   app.querySelectorAll('.invite-btn').forEach((b) => (b.onclick = openInvite));
   app.querySelectorAll('[data-befriend]').forEach((b) => (b.onclick = async () => {
@@ -814,6 +870,7 @@ function drawGame() {
 function boardHTML(player) {
   const lit = shelfPositions(player);
   return player.order.map((tileId, pos) => {
+    if (tileId === null) return `<div class="tile free${lit.has(pos) ? ' shelf' : ''}" aria-label="Free space" title="Free space — counts as read"><span class="topic"><span class="free-mark">Free</span><span class="free-sub">space</span></span></div>`;
     const tile = game.tiles[tileId];
     const sq = player.squares[tileId];
     const cls = ['tile', sq?.status, lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
@@ -832,6 +889,7 @@ function otherHTML(p, tiles = game.tiles, tag = '') {
   return `<article class="paper other">
     <header><b>${esc(p.username)}${tag}</b><span class="shelf-count" style="font-size:18px">${miniBooks(p.shelves, p.id)}${p.shelves}</span></header>
     <div class="mini-board">${p.order.map((tileId, pos) => {
+      if (tileId === null) return `<div class="free${lit.has(pos) ? ' shelf' : ''}" title="Free space"><span class="noimg">FREE</span></div>`;
       const sq = p.squares[tileId]; const tile = tiles[tileId];
       const tip = `${tile.text}${sq ? ` — ${sq.status}: ${sq.book.title}${sq.book.author ? ' by ' + sq.book.author : ''}` : ''}`;
       const cls = [sq?.status === 'planned' ? 'planned' : '', lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
@@ -947,6 +1005,7 @@ async function renderGM() {
       <p class="muted small">Gamemasters can promote readers to Gamemaster.${me.isMaster ? ' As master you can also demote Gamemasters and remove accounts.' : ''}</p>
       <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isGM ? '<span class="stamp upcoming">Gamemaster</span>' : ''}</span>
         ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make Gamemaster</button>` : ''}
+        ${!u.isMaster || me.isMaster ? `<button class="btn ghost sm" data-resetpw="${esc(u.id)}" data-name="${esc(u.username)}">Reset password</button>` : ''}
         ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}">Demote</button>` : ''}
         ${me.isMaster && !u.isMaster ? `<button class="btn danger sm" data-remove="${esc(u.id)}" data-name="${esc(u.username)}">Remove</button>` : ''}
       </li>`).join('')}</ul>
@@ -963,6 +1022,7 @@ async function renderGM() {
     try {
       if (b.dataset.del) await api('/tiles/' + b.dataset.del, { method: 'DELETE' });
       else if (b.dataset.promote) await api(`/users/${b.dataset.promote}/promote`, { method: 'POST' });
+      else if (b.dataset.resetpw) { openResetPassword(b.dataset.resetpw, b.dataset.name); return; }
       else if (b.dataset.demote) await api(`/users/${b.dataset.demote}/demote`, { method: 'POST' });
       else if (b.dataset.remove) {
         if (!confirm(`Remove ${b.dataset.name}'s account and their cards in every game?`)) return;

@@ -1,6 +1,15 @@
 {
-  "version": "v0.0.0.3",
+  "version": "v0.0.0.4",
   "history": [
+    {
+      "version": "v0.0.0.4",
+      "date": "2026-11-07",
+      "notes": [
+        "Free space in the middle of every new card (24 tiles + free); it counts toward shelves",
+        "Gamemasters can reset a reader's password (only the master can reset the master's); the reader is signed out everywhere",
+        "Anyone can change their own password from the Password button"
+      ]
+    },
     {
       "version": "v0.0.0.3",
       "date": "2026-11-07",

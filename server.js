@@ -102,9 +102,10 @@ const LINES = (() => {
   lines.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]);
   return lines;
 })();
-// A player's board position p shows tile order[p]. A shelf (bingo) is any full row, column or diagonal of read books.
+// A player's board position p shows tile order[p]; null is the free center space, which always counts as read.
+// A shelf (bingo) is any full row, column or diagonal of read books.
 function shelves(player) {
-  const read = (p) => player.squares[player.order[p]]?.status === 'read';
+  const read = (p) => player.order[p] === null || player.squares[player.order[p]]?.status === 'read';
   return LINES.filter((line) => line.every(read)).length;
 }
 function cleanStr(v, max) { return typeof v === 'string' ? v.trim().slice(0, max) : ''; }
@@ -149,8 +150,14 @@ function gameSummary(g, u) {
     myShelves: g.players[u.id] ? shelves(g.players[u.id]) : null,
   };
 }
+// Cards are shuffled per player. Games with a free center have 24 tiles and keep position 12 (the middle) free;
+// games made before v0.0.0.4 have 25 tiles and no free space.
+const CARD_TILES = 24;
 function addPlayer(g, uid) {
-  if (!g.players[uid]) g.players[uid] = { order: shuffle([...Array(25).keys()]), squares: {}, joinedAt: Date.now() };
+  if (g.players[uid]) return;
+  const order = shuffle([...Array(g.tiles.length).keys()]);
+  if (g.freeCenter) order.splice(12, 0, null);
+  g.players[uid] = { order, squares: {}, joinedAt: Date.now() };
 }
 
 // ---------- http plumbing ----------
@@ -278,6 +285,19 @@ async function api(req, res, url) {
     return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', 0) });
   }
   if (route === 'GET /me') return send(res, 200, { user: publicUser(me) });
+  // Change your own password (needs the current one). Your other sessions are signed out; this one stays.
+  if (route === 'POST /me/password') {
+    need();
+    const { hash } = await hashPassword(String(body.current || ''), me.salt);
+    if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(me.hash, 'hex'))) fail(400, 'Your current password is wrong');
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
+    Object.assign(me, await hashPassword(password));
+    const keep = cookies(req)[COOKIE];
+    for (const [t, s] of Object.entries(db.sessions)) if (s.userId === me.id && t !== keep) delete db.sessions[t];
+    save();
+    return send(res, 200, { ok: true });
+  }
 
   // --- users (Gamemasters see the list and can promote; only the master can demote or remove) ---
   if (route === 'GET /users') {
@@ -289,6 +309,19 @@ async function api(req, res, url) {
     const u = db.users[parts[1]] || fail(404, 'No such account');
     if (u.role === 'player') { u.role = 'gamemaster'; save(); }
     return send(res, 200, { user: publicUser(u) });
+  }
+  // A Gamemaster sets a new password for someone (only the master may reset the master's). They are signed out everywhere.
+  if (route === 'POST /users/:id/password') {
+    needGM();
+    const u = db.users[parts[1]] || fail(404, 'No such account');
+    if (u.role === 'master' && me.role !== 'master') fail(403, "Only the master can reset the master's password");
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
+    Object.assign(u, await hashPassword(password));
+    const keep = u.id === me.id ? cookies(req)[COOKIE] : null;
+    for (const [t, s] of Object.entries(db.sessions)) if (s.userId === u.id && t !== keep) delete db.sessions[t];
+    save();
+    return send(res, 200, { ok: true });
   }
   if (route === 'POST /users/:id/demote') {
     needMaster();
@@ -343,12 +376,12 @@ async function api(req, res, url) {
     const chosen = (Array.isArray(body.tileIds) ? body.tileIds : []).map((id) => db.tiles.find((t) => t.id === id)).filter(Boolean);
     const custom = (Array.isArray(body.custom) ? body.custom : []).map((t) => cleanStr(t, 80)).filter(Boolean);
     const picked = [...new Map([...chosen.map((t) => t.text), ...custom].map((t) => [t.toLowerCase(), t])).values()];
-    if (picked.length > 25) fail(400, `That's ${picked.length} tiles — a card has exactly 25`);
+    if (picked.length > CARD_TILES) fail(400, `That's ${picked.length} tiles — a card has ${CARD_TILES} plus the free space`);
     const rest = shuffle(db.tiles.map((t) => t.text).filter((t) => !picked.some((p) => p.toLowerCase() === t.toLowerCase())));
-    while (picked.length < 25 && rest.length) picked.push(rest.pop());
-    if (picked.length < 25) fail(400, 'Not enough tiles to fill a card — add some custom tiles');
+    while (picked.length < CARD_TILES && rest.length) picked.push(rest.pop());
+    if (picked.length < CARD_TILES) fail(400, 'Not enough tiles to fill a card — add some custom tiles');
     const g = {
-      id: newId(), code: newCode(), name, start: body.start, end: body.end, creatorId: me.id, createdAt: Date.now(),
+      id: newId(), code: newCode(), name, start: body.start, end: body.end, creatorId: me.id, createdAt: Date.now(), freeCenter: true,
       tiles: picked.map((text, i) => ({ id: i, text, custom: custom.some((c) => c.toLowerCase() === text.toLowerCase()) })),
       players: {},
     };
@@ -501,7 +534,7 @@ async function api(req, res, url) {
     const g = db.games[parts[1]];
     if (!g || !isMember(g, me)) fail(404, 'Game not found');
     const tileId = Number(parts[3]);
-    if (!Number.isInteger(tileId) || tileId < 0 || tileId > 24) fail(400, 'Bad tile');
+    if (!Number.isInteger(tileId) || tileId < 0 || tileId >= g.tiles.length) fail(400, 'Bad tile');
     const player = g.players[me.id];
     const status = gameStatus(g);
     if (status === 'ended') fail(400, 'This game has ended');

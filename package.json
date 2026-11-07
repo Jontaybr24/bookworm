@@ -1,0 +1,11 @@
+{
+  "name": "bookworm",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bookworm: book bingo. The page and its server (no dependencies).",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "PORT=3000 node server.js"
+  }
+}

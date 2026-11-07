@@ -1,0 +1,16 @@
+{
+  "version": "v0.0.0.0",
+  "history": [
+    {
+      "version": "v0.0.0.0",
+      "date": "2026-11-07",
+      "notes": [
+        "First prototype: accounts (first account is master), Gamemaster role and tile library",
+        "Create, join (by code) and view games with start and end dates",
+        "25-tile cards shuffled per player, plus custom tiles per game",
+        "Open Library search with covers and descriptions; read or plan a book on any tile",
+        "Readers list with shelf (bingo) counts and every other reader's card below"
+      ]
+    }
+  ]
+}

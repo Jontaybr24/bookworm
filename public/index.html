@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bookworm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Cormorant+Garamond:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --wood-dark: #1e130d;
+  --wood: #3a2417;
+  --wood-light: #5b3a24;
+  --paper: #f4ead3;
+  --paper-2: #ebdfc2;
+  --paper-edge: #d6c49c;
+  --ink: #2a2017;
+  --ink-soft: #5d4c3a;
+  --brass: #c9a45c;
+  --brass-bright: #e8cf8f;
+  --oxblood: #7a2e2a;
+  --forest: #2f5140;
+  --navy: #26375a;
+  --danger: #8f2d22;
+  --radius: 4px;
+  --shadow: 0 10px 30px rgba(0,0,0,.45);
+  --serif: 'EB Garamond', Georgia, serif;
+  --display: 'Cormorant Garamond', Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  min-height: 100vh;
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--ink);
+  background-color: var(--wood-dark);
+  background-image:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.08) 0 1px, transparent 1px 37px),
+    radial-gradient(ellipse at 50% -10%, #4a2e1c 0%, var(--wood-dark) 70%);
+  background-attachment: fixed;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+a { color: var(--oxblood); }
+[hidden] { display: none !important; }
+
+/* ---------- title: a shelf of books, one letter per spine ---------- */
+header.top {
+  max-width: 1280px; margin: 0 auto; padding: 22px 16px 0;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.shelf-title { position: relative; display: inline-flex; flex-direction: column; text-decoration: none; }
+.shelf-title h1 { margin: 0; display: flex; align-items: flex-end; gap: 3px; padding: 0 14px; }
+.spine {
+  --h: 108px; --w: 52px; --c: #7a2e2a; --t: var(--brass-bright);
+  width: var(--w); height: var(--h);
+  display: flex; align-items: center; justify-content: center;
+  background:
+    linear-gradient(180deg, transparent 9px, var(--t) 9px 11px, transparent 11px 15px, var(--t) 15px 16px, transparent 16px),
+    linear-gradient(0deg, transparent 9px, var(--t) 9px 11px, transparent 11px 15px, var(--t) 15px 16px, transparent 16px),
+    linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 28%, rgba(255,255,255,.02) 55%, rgba(0,0,0,.30)),
+    var(--c);
+  border-radius: 3px 3px 1px 1px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 2px 0 3px rgba(0,0,0,.35);
+  font-family: 'Abril Fatface', var(--display);
+  font-size: calc(var(--w) * .62);
+  color: var(--t);
+  text-shadow: 0 1px 0 rgba(0,0,0,.35);
+  font-weight: 400; line-height: 1;
+  transform-origin: bottom left;
+}
+.spine.lean { transform: rotate(5deg) translateX(4px); margin-left: 6px; }
+.plank {
+  height: 16px; margin-top: 0;
+  background: linear-gradient(180deg, #7a5131 0%, #5b3a24 45%, #3a2417 100%);
+  border-radius: 2px;
+  box-shadow: 0 8px 12px -4px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.15);
+}
+.plank::after { content: ''; display: block; height: 5px; margin: 16px 10px 0; background: rgba(0,0,0,.35); filter: blur(4px); }
+
+nav.userbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 22px; color: var(--paper-2); }
+nav.userbar .who { font-style: italic; margin-right: 6px; }
+nav.userbar .role { font-family: var(--display); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 13px; color: var(--brass); margin-left: 4px; }
+
+/* ---------- common ---------- */
+main { max-width: 1280px; margin: 0 auto; padding: 22px 16px 90px; }
+.paper {
+  background: linear-gradient(180deg, var(--paper), var(--paper-2));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--paper-edge);
+  padding: 24px;
+}
+h2, h3 { font-family: var(--display); font-weight: 700; margin: 0 0 12px; line-height: 1.1; }
+h2 { font-size: 30px; }
+h3 { font-size: 22px; }
+.muted { color: var(--ink-soft); }
+.small { font-size: 15px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 16px; border-radius: var(--radius); cursor: pointer;
+  border: 1px solid #4a2f1d; background: linear-gradient(180deg, #6b4429, #4a2f1d); color: var(--paper);
+  font-family: var(--display); font-weight: 700; font-size: 17px; letter-spacing: .02em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), 0 2px 4px rgba(0,0,0,.25);
+}
+.btn:hover { filter: brightness(1.12); }
+.btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+.btn.primary { background: linear-gradient(180deg, #8e3a33, var(--oxblood)); border-color: #5b211e; }
+.btn.green { background: linear-gradient(180deg, #3d6853, var(--forest)); border-color: #1f372b; }
+.btn.ghost { background: transparent; color: inherit; border-color: currentColor; box-shadow: none; }
+.btn.danger { background: transparent; color: var(--danger); border-color: var(--danger); box-shadow: none; }
+.btn.sm { padding: 3px 10px; font-size: 15px; }
+nav.userbar .btn.ghost { color: var(--paper-2); }
+label { display: block; font-family: var(--display); font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+input[type=text], input[type=password], input[type=date], input[type=search], textarea {
+  width: 100%; padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid var(--paper-edge); background: #fffaf0; box-shadow: inset 0 1px 2px rgba(0,0,0,.08);
+}
+input:focus, textarea:focus, .btn:focus-visible, .tile:focus-visible { outline: 2px solid var(--oxblood); outline-offset: 2px; }
+.field { margin-bottom: 14px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.row > .field { flex: 1 1 180px; }
+.error { color: var(--danger); min-height: 1.3em; font-style: italic; }
+.stamp {
+  display: inline-block; padding: 1px 8px; border-radius: 3px; font-family: var(--display); font-weight: 700;
+  font-size: 13px; letter-spacing: .08em; text-transform: uppercase; border: 1.5px solid currentColor;
+}
+.stamp.active { color: var(--forest); }
+.stamp.upcoming { color: var(--navy); }
+.stamp.ended { color: var(--ink-soft); }
+
+/* ---------- auth ---------- */
+.auth { max-width: 420px; margin: 30px auto; }
+.auth .switch { margin-top: 14px; font-size: 16px; }
+.linkish { background: none; border: 0; padding: 0; color: var(--oxblood); text-decoration: underline; cursor: pointer; }
+
+/* ---------- lobby ---------- */
+.tabs { display: flex; gap: 4px; padding-left: 12px; }
+.tabs button {
+  padding: 8px 22px 6px; border: 0; cursor: pointer; border-radius: 8px 8px 0 0;
+  font-family: var(--display); font-weight: 700; font-size: 19px;
+  background: #cdb98d; color: var(--ink-soft); box-shadow: inset 0 -6px 8px -6px rgba(0,0,0,.3);
+}
+.tabs button[aria-selected=true] { background: var(--paper); color: var(--ink); box-shadow: none; }
+.tabpanel { border-top-left-radius: var(--radius); }
+.catalog { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.card-entry {
+  text-align: left; cursor: pointer; padding: 14px 16px 12px; border-radius: 3px;
+  border: 1px solid var(--paper-edge);
+  background:
+    linear-gradient(180deg, transparent 30px, #c9d6e3 30px 31px, transparent 31px) top / 100% 100% no-repeat,
+    repeating-linear-gradient(180deg, transparent 0 23px, rgba(80,110,150,.18) 23px 24px) 0 31px / 100% calc(100% - 31px) no-repeat,
+    #fffaf0;
+  box-shadow: 0 2px 5px rgba(0,0,0,.12);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.card-entry:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,.18); }
+.card-entry .name { font-family: var(--display); font-weight: 700; font-size: 22px; line-height: 1.2; }
+.card-entry .meta { font-size: 15px; color: var(--ink-soft); line-height: 24px; margin-top: 4px; }
+.picker { max-height: 340px; overflow: auto; border: 1px solid var(--paper-edge); background: #fffaf0; border-radius: var(--radius); padding: 6px; columns: 2 260px; column-gap: 12px; }
+.picker label { font-family: var(--serif); font-weight: 400; font-size: 16px; display: flex; gap: 8px; align-items: flex-start; padding: 3px 4px; margin: 0; break-inside: avoid; cursor: pointer; border-radius: 3px; }
+.picker label:hover { background: rgba(0,0,0,.04); }
+.picker input { margin-top: 5px; accent-color: var(--oxblood); }
+.counter { font-family: var(--display); font-weight: 700; }
+.counter.over { color: var(--danger); }
+
+/* ---------- game ---------- */
+.game-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; align-items: start; }
+.game-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.game-head h2 { margin-bottom: 4px; }
+.board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.tile {
+  position: relative; aspect-ratio: 3 / 4; overflow: hidden; cursor: pointer; padding: 0;
+  border: 1px solid var(--paper-edge); border-radius: 3px; background: #fffaf0; text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,.12); transition: transform .12s ease, box-shadow .12s ease;
+}
+.tile:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,.2); }
+.tile .topic {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8px;
+  font-family: var(--display); font-weight: 700; font-size: clamp(12px, 1.25vw, 17px); line-height: 1.15;
+}
+.tile img.cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tile .nocover { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.25), rgba(255,255,255,.08) 30%, rgba(0,0,0,.2)), var(--navy); }
+.tile .caption {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 6px 6px; text-align: left;
+  background: linear-gradient(180deg, transparent, rgba(20,12,6,.88) 45%);
+  color: var(--paper); font-size: clamp(11px, 1vw, 14px); line-height: 1.15;
+}
+.tile .caption b { display: block; font-weight: 600; }
+.tile .caption i { opacity: .8; }
+.tile .flag {
+  position: absolute; top: 6px; right: 6px; padding: 0 6px; border-radius: 2px;
+  font-family: var(--display); font-weight: 700; font-size: 12px; letter-spacing: .06em; text-transform: uppercase;
+}
+.tile.read .flag { background: var(--forest); color: var(--paper); }
+.tile.planned { border: 2px dashed var(--ink-soft); }
+.tile.planned img.cover, .tile.planned .nocover { opacity: .42; filter: grayscale(.6) sepia(.3); }
+.tile.planned .flag { background: var(--paper); color: var(--ink-soft); border: 1px solid var(--ink-soft); }
+.tile.planned .topic { align-items: flex-start; padding-top: 12px; }
+.tile.read .topic { display: none; }
+.tile.shelf { box-shadow: 0 0 0 3px var(--brass), 0 4px 10px rgba(0,0,0,.25); }
+.legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: 15px; color: var(--ink-soft); }
+.legend span::before { content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+.legend .l-read::before { background: var(--forest); }
+.legend .l-plan::before { border: 2px dashed var(--ink-soft); }
+.legend .l-shelf::before { box-shadow: 0 0 0 2px var(--brass); }
+
+aside .paper + .paper { margin-top: 18px; }
+.code-box { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.code-box code { font-family: 'Abril Fatface', var(--display); font-size: 26px; letter-spacing: .14em; color: var(--oxblood); }
+.players { list-style: none; margin: 0; padding: 0; }
+.players li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dotted var(--paper-edge); }
+.players li:last-child { border-bottom: 0; }
+.players .rank { width: 22px; text-align: center; font-family: var(--display); font-weight: 700; color: var(--ink-soft); }
+.players .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.players .pname small { display: block; color: var(--ink-soft); font-size: 14px; }
+.players .me .pname { font-weight: 600; }
+.shelf-count { display: flex; align-items: flex-end; gap: 6px; font-family: var(--display); font-weight: 700; font-size: 22px; }
+.mini-books { display: inline-flex; align-items: flex-end; gap: 1px; height: 20px; }
+.mini-books i { display: block; width: 5px; border-radius: 1px 1px 0 0; }
+
+.others { margin-top: 28px; }
+.others > h3 { color: var(--paper); margin-left: 4px; }
+.others-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.other { padding: 16px; }
+.other header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+.other header b { font-family: var(--display); font-size: 20px; }
+.mini-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+.mini-board div { position: relative; aspect-ratio: 3 / 4; border-radius: 2px; overflow: hidden; background: #e4d6b5; border: 1px solid var(--paper-edge); }
+.mini-board img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mini-board .noimg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 2px; background: var(--navy); color: var(--paper); font-size: 9px; line-height: 1.05; text-align: center; overflow: hidden; }
+.mini-board .planned { border-style: dashed; border-color: var(--ink-soft); }
+.mini-board .planned img, .mini-board .planned .noimg { opacity: .35; filter: grayscale(.6); }
+.mini-board .shelf { box-shadow: 0 0 0 2px var(--brass); }
+
+/* ---------- modal ---------- */
+.overlay { position: fixed; inset: 0; background: rgba(15,9,5,.7); display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px 16px; z-index: 50; overflow: auto; }
+.modal { width: 100%; max-width: 640px; position: relative; }
+.modal .close { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 28px; line-height: 1; cursor: pointer; color: var(--ink-soft); }
+.modal .eyebrow { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 13px; color: var(--oxblood); }
+.results { list-style: none; margin: 10px 0 0; padding: 0; max-height: 46vh; overflow: auto; }
+.results li button { display: flex; gap: 12px; width: 100%; text-align: left; padding: 8px; border: 0; border-bottom: 1px dotted var(--paper-edge); background: none; cursor: pointer; align-items: center; }
+.results li button:hover { background: rgba(0,0,0,.05); }
+.results img, .results .ph { width: 42px; height: 62px; object-fit: cover; flex: none; border-radius: 2px; background: var(--navy); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.results .t { font-weight: 600; line-height: 1.2; }
+.results .a { font-size: 15px; color: var(--ink-soft); }
+.book-detail { display: flex; gap: 18px; margin: 10px 0 16px; }
+.book-detail img, .book-detail .ph { width: 120px; height: 180px; object-fit: cover; flex: none; border-radius: 2px; background: var(--navy); box-shadow: 0 4px 10px rgba(0,0,0,.35); }
+.book-detail h3 { margin-bottom: 2px; }
+.book-detail .desc { font-size: 16px; line-height: 1.45; margin-top: 8px; max-height: 190px; overflow: auto; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- gamemaster ---------- */
+.gm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+.list { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow: auto; }
+.list li { display: flex; align-items: center; gap: 10px; padding: 6px 2px; border-bottom: 1px dotted var(--paper-edge); }
+.list li span { flex: 1; }
+
+/* ---------- version token ---------- */
+#version {
+  position: fixed; left: 14px; bottom: 14px; z-index: 40; cursor: pointer;
+  padding: 4px 12px; border-radius: 2px; border: 1px solid #8a6a32;
+  background: linear-gradient(180deg, #f1dfae, #d7bd7c); color: #3a2a12;
+  font-family: var(--display); font-weight: 700; font-size: 15px; letter-spacing: .05em;
+  box-shadow: 0 3px 8px rgba(0,0,0,.45);
+}
+.history { list-style: none; padding: 0; margin: 0; }
+.history li { padding: 10px 0; border-bottom: 1px dotted var(--paper-edge); }
+.history li b { font-family: var(--display); font-size: 19px; }
+
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 8px 18px; border-radius: var(--radius); z-index: 60; box-shadow: var(--shadow); }
+
+@media (max-width: 1000px) {
+  .game-layout { grid-template-columns: 1fr; }
+  .others-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gm-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  body { font-size: 17px; }
+  .spine { --w: 34px !important; height: calc(var(--h) * .68) !important; }
+  .paper { padding: 16px; }
+  .board { gap: 4px; }
+  .tile .topic { font-size: 10px; padding: 3px; }
+  .tile .caption { font-size: 9px; padding: 10px 3px 3px; }
+  .tile .flag { font-size: 8px; top: 3px; right: 3px; padding: 0 3px; }
+  .others-grid { grid-template-columns: 1fr; }
+  .book-detail { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="shelf-title" href="#/" aria-label="Bookworm, home">
+    <h1 id="title"></h1>
+    <div class="plank"></div>
+  </a>
+  <nav class="userbar" id="userbar" hidden></nav>
+</header>
+<main id="app"></main>
+<button id="version" type="button" title="Version history">v…</button>
+
+<script>
+'use strict';
+const $ = (sel, root = document) => root.querySelector(sel);
+const app = $('#app');
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let me = null;
+let pollTimer = null;
+
+// ---------- title shelf ----------
+const SPINES = [
+  ['B', '#7a2e2a', 112, 54], ['O', '#2f5140', 100, 50], ['O', '#26375a', 117, 52], ['K', '#b08227', 104, 56, '#2a1c0a'],
+  ['W', '#5a2f4f', 119, 62], ['O', '#2c5a5f', 98, 50], ['R', '#9a4a24', 110, 52], ['M', '#3b4430', 106, 58, null, true],
+];
+$('#title').innerHTML = SPINES.map(([l, c, h, w, t, lean]) =>
+  `<span class="spine${lean ? ' lean' : ''}" style="--c:${c};--h:${h}px;--w:${w}px;${t ? `--t:${t};` : ''}">${l}</span>`).join('');
+
+// ---------- api ----------
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, {
+    method: opts.method || 'GET',
+    headers: opts.body ? { 'Content-Type': 'application/json' } : {},
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (res.status === 401 && path !== '/login') { me = null; renderUserbar(); if (!location.hash.startsWith('#/login')) route(); }
+    throw new Error(data.error || 'Something went wrong');
+  }
+  return data;
+}
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2600);
+}
+function fmtDate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function isoDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+const LINES = (() => {
+  const L = [];
+  for (let r = 0; r < 5; r++) L.push([0, 1, 2, 3, 4].map((c) => r * 5 + c));
+  for (let c = 0; c < 5; c++) L.push([0, 1, 2, 3, 4].map((r) => r * 5 + c));
+  L.push([0, 6, 12, 18, 24], [4, 8, 12, 16, 20]);
+  return L;
+})();
+function shelfPositions(player) {
+  const read = (p) => player.squares[player.order[p]]?.status === 'read';
+  const set = new Set();
+  LINES.filter((l) => l.every(read)).forEach((l) => l.forEach((p) => set.add(p)));
+  return set;
+}
+function miniBooks(n) {
+  const colors = ['#7a2e2a', '#2f5140', '#26375a', '#b08227', '#5a2f4f', '#2c5a5f', '#9a4a24', '#3b4430'];
+  const shown = Math.min(n, 12);
+  return `<span class="mini-books" aria-hidden="true">${Array.from({ length: shown }, (_, i) =>
+    `<i style="background:${colors[i % colors.length]};height:${14 + ((i * 7) % 6)}px"></i>`).join('')}</span>`;
+}
+
+// ---------- modal ----------
+function openModal(html, { onClose } = {}) {
+  closeModal();
+  const ov = document.createElement('div');
+  ov.className = 'overlay'; ov.id = 'overlay';
+  ov.innerHTML = `<div class="modal paper" role="dialog" aria-modal="true"><button class="close" aria-label="Close">×</button>${html}</div>`;
+  ov.addEventListener('mousedown', (e) => { if (e.target === ov) closeModal(); });
+  $('.close', ov).onclick = closeModal;
+  ov._onClose = onClose;
+  document.body.appendChild(ov);
+  return $('.modal', ov);
+}
+function closeModal() {
+  const ov = $('#overlay');
+  if (ov) { ov.remove(); ov._onClose?.(); }
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+// ---------- version token ----------
+let versionInfo = null;
+fetch('/version.json', { cache: 'no-cache' }).then((r) => r.json()).then((v) => {
+  versionInfo = v;
+  $('#version').textContent = v.version;
+}).catch(() => {});
+$('#version').onclick = () => {
+  if (!versionInfo) return;
+  openModal(`<p class="eyebrow">Colophon</p><h2>Version history</h2>
+    <ul class="history">${versionInfo.history.map((h) => `<li><b>${esc(h.version)}</b> <span class="muted small">${esc(h.date)}</span>
+      <ul class="small">${h.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul></li>`).join('')}</ul>`);
+};
+
+// ---------- userbar ----------
+function renderUserbar() {
+  const bar = $('#userbar');
+  if (!me) { bar.hidden = true; bar.innerHTML = ''; return; }
+  bar.hidden = false;
+  const role = me.isMaster ? 'Master' : me.isGM ? 'Gamemaster' : '';
+  bar.innerHTML = `<span class="who">Reading as <b>${esc(me.username)}</b>${role ? `<span class="role">${role}</span>` : ''}</span>
+    <a class="btn ghost sm" href="#/">Games</a>
+    ${me.isGM ? '<a class="btn ghost sm" href="#/gm">Gamemaster</a>' : ''}
+    <button class="btn ghost sm" id="logout">Sign out</button>`;
+  $('#logout').onclick = async () => { await api('/logout', { method: 'POST' }).catch(() => {}); me = null; renderUserbar(); location.hash = '#/login'; };
+}
+
+// ---------- router ----------
+async function route() {
+  clearInterval(pollTimer); pollTimer = null;
+  closeModal();
+  const hash = location.hash || '#/';
+  if (!me) return renderAuth(hash === '#/register' ? 'register' : 'login');
+  if (hash === '#/login' || hash === '#/register') { location.hash = '#/'; return; }
+  const m = hash.match(/^#\/game\/([\w-]+)/);
+  if (m) return renderGame(m[1]);
+  if (hash === '#/gm' && me.isGM) return renderGM();
+  const tab = (hash.match(/^#\/(create|join|view)$/) || [])[1] || 'view';
+  return renderLobby(tab);
+}
+window.addEventListener('hashchange', route);
+
+// ---------- auth ----------
+function renderAuth(mode) {
+  const reg = mode === 'register';
+  app.innerHTML = `<section class="auth paper">
+    <p class="eyebrow" style="font-family:var(--display);font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:13px;color:var(--oxblood);margin:0 0 4px">Library card</p>
+    <h2>${reg ? 'Get a library card' : 'Sign in'}</h2>
+    <p class="muted small">${reg ? 'Make an account to start or join a reading bingo.' : 'Welcome back to the stacks.'}</p>
+    <form id="authForm">
+      <div class="field"><label for="u">Username</label><input type="text" id="u" autocomplete="username" required></div>
+      <div class="field"><label for="p">Password</label><input type="password" id="p" autocomplete="${reg ? 'new-password' : 'current-password'}" required></div>
+      <p class="error" id="err"></p>
+      <button class="btn primary" type="submit">${reg ? 'Create account' : 'Sign in'}</button>
+    </form>
+    <p class="switch">${reg ? 'Already have a card? <a href="#/login">Sign in</a>' : 'New here? <a href="#/register">Get a library card</a>'}</p>
+  </section>`;
+  $('#u').focus();
+  $('#authForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { user } = await api(reg ? '/register' : '/login', { method: 'POST', body: { username: $('#u').value, password: $('#p').value } });
+      me = user; renderUserbar();
+      if (reg && user.isMaster) toast('You are the master account.');
+      location.hash = '#/'; route();
+    } catch (err) { $('#err').textContent = err.message; }
+  };
+}
+
+// ---------- lobby: create / join / view ----------
+async function renderLobby(tab) {
+  const tabs = [['view', 'View games'], ['create', 'Create a game'], ['join', 'Join a game']];
+  app.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, l]) =>
+    `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}</button>`).join('')}</div>
+    <section class="paper tabpanel" id="panel"></section>`;
+  app.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => (location.hash = '#/' + b.dataset.tab)));
+  const panel = $('#panel');
+  if (tab === 'view') return renderView(panel);
+  if (tab === 'create') return renderCreate(panel);
+  return renderJoin(panel);
+}
+
+async function renderView(panel) {
+  panel.innerHTML = '<p class="muted">Pulling the catalogue drawer…</p>';
+  const { games } = await api('/games');
+  if (!games.length) {
+    panel.innerHTML = `<h2>Your games</h2><p class="muted">You aren't in any games yet. <a href="#/create">Create one</a> or <a href="#/join">join with a code</a>.</p>`;
+    return;
+  }
+  panel.innerHTML = `<h2>${me.isMaster ? 'All games' : 'Your games'}</h2><div class="catalog">${games.map((g) => `
+    <button class="card-entry" data-id="${esc(g.id)}">
+      <div class="name">${esc(g.name)}</div>
+      <div class="meta"><span class="stamp ${g.status}">${g.status}</span> &nbsp;${fmtDate(g.start)} – ${fmtDate(g.end)}</div>
+      <div class="meta">${g.playerCount} reader${g.playerCount === 1 ? '' : 's'}${g.isMember ? ` · your shelves: ${g.myShelves}` : ' · not playing'}</div>
+    </button>`).join('')}</div>`;
+  panel.querySelectorAll('[data-id]').forEach((b) => (b.onclick = () => (location.hash = '#/game/' + b.dataset.id)));
+}
+
+async function renderCreate(panel) {
+  const { tiles } = await api('/tiles');
+  const start = new Date(); const end = new Date(); end.setMonth(end.getMonth() + 3);
+  panel.innerHTML = `<h2>Create a game</h2>
+    <form id="createForm">
+      <div class="row">
+        <div class="field" style="flex:2 1 260px"><label for="gname">Game name</label><input type="text" id="gname" maxlength="60" placeholder="Winter Reading Challenge" required></div>
+        <div class="field"><label for="gstart">Starts</label><input type="date" id="gstart" value="${isoDate(start)}" required></div>
+        <div class="field"><label for="gend">Ends</label><input type="date" id="gend" value="${isoDate(end)}" required></div>
+      </div>
+      <div class="field">
+        <label>Tiles from the library <span class="muted small" style="font-weight:400">— pick up to 25; any spaces left are filled at random</span></label>
+        <div class="picker" id="picker">${tiles.map((t) => `<label><input type="checkbox" value="${esc(t.id)}"> ${esc(t.text)}</label>`).join('')}</div>
+      </div>
+      <div class="field">
+        <label for="custom">Your own tiles <span class="muted small" style="font-weight:400">— one per line</span></label>
+        <textarea id="custom" rows="4" placeholder="A book set in our hometown&#10;A book with a dragon on the cover"></textarea>
+      </div>
+      <p><span class="counter" id="counter"></span></p>
+      <p class="error" id="err"></p>
+      <button class="btn primary" type="submit">Create game</button>
+    </form>`;
+  const count = () => {
+    const n = panel.querySelectorAll('#picker input:checked').length + $('#custom').value.split('\n').filter((l) => l.trim()).length;
+    const c = $('#counter');
+    c.textContent = n > 25 ? `${n} tiles chosen — remove ${n - 25}` : `${n} of 25 chosen${n < 25 ? ` · ${25 - n} will be drawn at random` : ''}`;
+    c.classList.toggle('over', n > 25);
+  };
+  panel.addEventListener('input', count); count();
+  $('#createForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { game } = await api('/games', { method: 'POST', body: {
+        name: $('#gname').value, start: $('#gstart').value, end: $('#gend').value,
+        tileIds: [...panel.querySelectorAll('#picker input:checked')].map((i) => i.value),
+        custom: $('#custom').value.split('\n'),
+      } });
+      location.hash = '#/game/' + game.id;
+    } catch (err) { $('#err').textContent = err.message; }
+  };
+}
+
+function renderJoin(panel) {
+  panel.innerHTML = `<h2>Join a game</h2>
+    <p class="muted">Ask someone in the game for its code — they'll find it on the game's page.</p>
+    <form id="joinForm" style="max-width:360px">
+      <div class="field"><label for="code">Game code</label><input type="text" id="code" maxlength="12" autocomplete="off" style="text-transform:uppercase;letter-spacing:.15em;font-size:22px" required></div>
+      <p class="error" id="err"></p>
+      <button class="btn primary" type="submit">Join</button>
+    </form>`;
+  $('#code').focus();
+  $('#joinForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { game } = await api('/games/join', { method: 'POST', body: { code: $('#code').value } });
+      location.hash = '#/game/' + game.id;
+    } catch (err) { $('#err').textContent = err.message; }
+  };
+}
+
+// ---------- game ----------
+let game = null;
+async function renderGame(id) {
+  app.innerHTML = '<p style="color:var(--paper)">Opening the book…</p>';
+  try { ({ game } = await api('/games/' + id)); }
+  catch (err) { app.innerHTML = `<section class="paper"><h2>Game not found</h2><p>${esc(err.message)}</p><a class="btn" href="#/">Back to games</a></section>`; return; }
+  drawGame();
+  pollTimer = setInterval(async () => {
+    if ($('#overlay')) return;
+    try { ({ game } = await api('/games/' + id)); drawGame(); } catch {}
+  }, 15000);
+}
+
+function drawGame() {
+  const mine = game.players.find((p) => p.id === me.id);
+  const others = game.players.filter((p) => p.id !== me.id);
+  const ranked = [...game.players].sort((a, b) => b.shelves - a.shelves || b.read - a.read || a.username.localeCompare(b.username));
+  const canDelete = game.creatorId === me.id || me.isMaster;
+  const statusNote = { active: 'In progress', upcoming: `Starts ${fmtDate(game.start)} — plan your picks`, ended: 'This game has ended' }[game.status];
+
+  app.innerHTML = `<div class="game-layout">
+    <section class="paper">
+      <div class="game-head">
+        <div>
+          <h2>${esc(game.name)}</h2>
+          <div class="muted small"><span class="stamp ${game.status}">${game.status}</span> &nbsp;${fmtDate(game.start)} – ${fmtDate(game.end)} · ${esc(statusNote)}</div>
+        </div>
+        <div class="actions">
+          ${mine && !canDelete ? '<button class="btn ghost sm" id="leave">Leave game</button>' : ''}
+          ${canDelete ? '<button class="btn danger sm" id="delete">Delete game</button>' : ''}
+        </div>
+      </div>
+      ${mine ? `<div class="board" id="board">${boardHTML(mine)}</div>
+        <div class="legend"><span class="l-read">Read</span><span class="l-plan">Planned</span><span class="l-shelf">Part of a shelf (bingo)</span></div>`
+        : '<p class="muted">You are viewing this game as the master account and are not playing in it.</p>'}
+    </section>
+    <aside>
+      <div class="paper">
+        <h3>Game code</h3>
+        <div class="code-box"><code>${esc(game.code)}</code><button class="btn sm" id="copy">Copy</button></div>
+        <p class="muted small" style="margin:6px 0 0">Share it so friends can join.</p>
+      </div>
+      <div class="paper">
+        <h3>Readers</h3>
+        <ul class="players">${ranked.map((p, i) => `<li class="${p.id === me.id ? 'me' : ''}">
+          <span class="rank">${i + 1}</span>
+          <span class="pname">${esc(p.username)}${p.id === me.id ? ' (you)' : ''}<small>${p.read} read · ${p.planned} planned</small></span>
+          <span class="shelf-count" title="${p.shelves} shelves (bingos)">${miniBooks(p.shelves)}${p.shelves}</span>
+        </li>`).join('')}</ul>
+        <p class="muted small" style="margin:8px 0 0">A <b>shelf</b> is a full row, column or diagonal of books read.</p>
+      </div>
+    </aside>
+  </div>
+  ${others.length ? `<section class="others"><h3>Other readers' cards</h3>
+    <div class="others-grid">${others.map(otherHTML).join('')}</div></section>` : ''}`;
+
+  if (mine) $('#board').querySelectorAll('.tile').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
+  $('#copy').onclick = () => navigator.clipboard?.writeText(game.code).then(() => toast('Code copied'), () => toast(game.code));
+  $('#leave') && ($('#leave').onclick = async () => {
+    if (!confirm('Leave this game? Your card will be removed.')) return;
+    await api(`/games/${game.id}/leave`, { method: 'POST' }); location.hash = '#/';
+  });
+  $('#delete') && ($('#delete').onclick = async () => {
+    if (!confirm(`Delete "${game.name}" for everyone? This can't be undone.`)) return;
+    await api(`/games/${game.id}`, { method: 'DELETE' }); toast('Game deleted'); location.hash = '#/';
+  });
+}
+
+function boardHTML(player) {
+  const lit = shelfPositions(player);
+  return player.order.map((tileId, pos) => {
+    const tile = game.tiles[tileId];
+    const sq = player.squares[tileId];
+    const cls = ['tile', sq?.status, lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
+    const label = `${tile.text}${sq ? ` — ${sq.status}: ${sq.book.title}` : ''}`;
+    return `<button class="${cls}" data-tile="${tileId}" aria-label="${esc(label)}" title="${esc(label)}">
+      ${sq ? (sq.book.cover ? `<img class="cover" src="${esc(sq.book.cover)}" alt="" loading="lazy">` : '<span class="nocover"></span>') : ''}
+      <span class="topic">${esc(tile.text)}</span>
+      ${sq ? `<span class="flag">${sq.status === 'read' ? 'Read' : 'Planned'}</span>
+        <span class="caption"><b>${esc(sq.book.title)}</b>${sq.book.author ? `<i>${esc(sq.book.author)}</i>` : ''}</span>` : ''}
+    </button>`;
+  }).join('');
+}
+
+function otherHTML(p) {
+  const lit = shelfPositions(p);
+  return `<article class="paper other">
+    <header><b>${esc(p.username)}</b><span class="shelf-count" style="font-size:18px">${miniBooks(p.shelves)}${p.shelves}</span></header>
+    <div class="mini-board">${p.order.map((tileId, pos) => {
+      const sq = p.squares[tileId]; const tile = game.tiles[tileId];
+      const tip = `${tile.text}${sq ? ` — ${sq.status}: ${sq.book.title}${sq.book.author ? ' by ' + sq.book.author : ''}` : ''}`;
+      const cls = [sq?.status === 'planned' ? 'planned' : '', lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
+      const inner = sq ? (sq.book.cover ? `<img src="${esc(sq.book.cover)}" alt="" loading="lazy">` : `<span class="noimg">${esc(sq.book.title)}</span>`) : '';
+      return `<div class="${cls}" title="${esc(tip)}">${inner}</div>`;
+    }).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0">${p.read} read · ${p.planned} planned</p>
+  </article>`;
+}
+
+// The tile dialog: shows what's on the tile, and a search to pick a book to read or plan.
+function openTile(tileId) {
+  const tile = game.tiles[tileId];
+  const mine = game.players.find((p) => p.id === me.id);
+  const sq = mine.squares[tileId];
+  const locked = game.status === 'ended';
+  const modal = openModal(`
+    <p class="eyebrow">${tile.custom ? 'Custom tile' : 'Tile'}</p>
+    <h2>${esc(tile.text)}</h2>
+    <div id="current"></div>
+    ${locked ? '<p class="muted">This game has ended, so cards can no longer change.</p>' : `
+      <div class="field" style="margin-top:8px"><label for="q">Find a book</label>
+        <input type="search" id="q" placeholder="Title, author or ISBN" autocomplete="off"></div>
+      <p class="muted small" id="searchNote">Search the Open Library catalogue.</p>
+      <ul class="results" id="results"></ul>`}`);
+  const current = $('#current', modal);
+  if (sq) {
+    current.innerHTML = bookDetailHTML(sq.book, sq.status === 'read' ? 'Read' : 'Planned') +
+      (locked ? '' : `<div class="actions">
+        ${sq.status === 'planned' ? `<button class="btn green" id="markRead" ${game.status !== 'active' ? 'disabled title="The game has not started yet"' : ''}>I've read it</button>` : ''}
+        <button class="btn danger" id="clear">Clear tile</button></div><hr style="border:0;border-top:1px dotted var(--paper-edge);margin:18px 0 8px">`);
+    $('#markRead', modal) && ($('#markRead', modal).onclick = () => setSquare(tileId, 'read', sq.book));
+    $('#clear', modal) && ($('#clear', modal).onclick = () => setSquare(tileId, null));
+  }
+  if (locked) return;
+  const q = $('#q', modal); const results = $('#results', modal); const note = $('#searchNote', modal);
+  if (!sq) q.focus();
+  let timer, seq = 0, found = [];
+  q.addEventListener('input', () => {
+    clearTimeout(timer);
+    const term = q.value.trim();
+    if (term.length < 2) { results.innerHTML = ''; note.textContent = 'Search the Open Library catalogue.'; return; }
+    timer = setTimeout(async () => {
+      const mySeq = ++seq;
+      note.textContent = 'Searching…';
+      try {
+        ({ books: found } = await api('/books/search?q=' + encodeURIComponent(term)));
+        if (mySeq !== seq) return;
+        note.textContent = found.length ? 'Pick a book:' : 'Nothing found — try another spelling.';
+        results.innerHTML = found.map((b, i) => `<li><button data-i="${i}">
+          ${b.cover ? `<img src="${esc(b.cover.replace('-M.', '-S.'))}" alt="" loading="lazy">` : '<span class="ph"></span>'}
+          <span><span class="t">${esc(b.title)}</span><br><span class="a">${esc(b.author || 'Unknown author')}${b.year ? ` · ${b.year}` : ''}</span></span>
+        </button></li>`).join('');
+      } catch (err) { if (mySeq === seq) note.textContent = err.message; }
+    }, 350);
+  });
+  results.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-i]'); if (!btn) return;
+    const book = { ...found[Number(btn.dataset.i)], description: '' };
+    current.innerHTML = bookDetailHTML(book, 'Selected', true) + `<div class="actions">
+      <button class="btn green" id="doRead" ${game.status !== 'active' ? 'disabled title="You can log finished books once the game starts"' : ''}>I've read it</button>
+      <button class="btn" id="doPlan">Plan to read</button></div>
+      <hr style="border:0;border-top:1px dotted var(--paper-edge);margin:18px 0 8px">`;
+    $('#doRead', modal).onclick = () => setSquare(tileId, 'read', book);
+    $('#doPlan', modal).onclick = () => setSquare(tileId, 'planned', book);
+    modal.parentElement.scrollTop = 0;
+    try {
+      const { description } = await api('/books/description?key=' + encodeURIComponent(book.key));
+      book.description = description;
+      const d = $('.desc', current);
+      if (d) d.textContent = description || 'No description in the catalogue.';
+    } catch { const d = $('.desc', current); if (d) d.textContent = 'No description in the catalogue.'; }
+  });
+}
+
+function bookDetailHTML(b, label, loading) {
+  return `<div class="book-detail">
+    ${b.cover ? `<img src="${esc(b.cover.replace('-S.', '-M.'))}" alt="Cover of ${esc(b.title)}">` : '<span class="ph"></span>'}
+    <div style="min-width:0">
+      <p class="eyebrow" style="margin:0 0 4px">${esc(label)}</p>
+      <h3>${esc(b.title)}</h3>
+      <div class="muted">${esc(b.author || 'Unknown author')}${b.year ? ` · ${b.year}` : ''}</div>
+      <div class="desc">${loading ? '<i class="muted">Fetching description…</i>' : esc(b.description || 'No description in the catalogue.')}</div>
+    </div></div>`;
+}
+
+async function setSquare(tileId, status, book) {
+  try {
+    ({ game } = await api(`/games/${game.id}/squares/${tileId}`, { method: 'POST', body: { status, book } }));
+    closeModal(); drawGame();
+    const mine = game.players.find((p) => p.id === me.id);
+    if (status === 'read') toast(mine.shelves ? `Logged! You have ${mine.shelves} shel${mine.shelves === 1 ? 'f' : 'ves'}.` : 'Logged!');
+  } catch (err) { toast(err.message); }
+}
+
+// ---------- gamemaster ----------
+async function renderGM() {
+  const [{ tiles }, { users }] = await Promise.all([api('/tiles'), api('/users')]);
+  app.innerHTML = `<div class="gm-grid">
+    <section class="paper">
+      <h2>Tile library</h2>
+      <p class="muted small">These are the tiles players can choose from when creating a game. Removing one doesn't change games already made.</p>
+      <form id="tileForm" class="row" style="align-items:flex-end;margin-bottom:12px">
+        <div class="field" style="margin:0;flex:1 1 240px"><label for="tileText">New tile</label><input type="text" id="tileText" maxlength="80" placeholder="A book with a train on the cover" required></div>
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <p class="error" id="tileErr"></p>
+      <p class="muted small">${tiles.length} tiles</p>
+      <ul class="list">${tiles.map((t) => `<li><span>${esc(t.text)}</span><button class="btn danger sm" data-del="${esc(t.id)}">Remove</button></li>`).join('')}</ul>
+    </section>
+    <section class="paper">
+      <h2>Readers</h2>
+      <p class="muted small">Gamemasters can promote readers to Gamemaster.${me.isMaster ? ' As master you can also demote Gamemasters and remove accounts.' : ''}</p>
+      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isGM ? '<span class="stamp upcoming">Gamemaster</span>' : ''}</span>
+        ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make Gamemaster</button>` : ''}
+        ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}">Demote</button>` : ''}
+        ${me.isMaster && !u.isMaster ? `<button class="btn danger sm" data-remove="${esc(u.id)}" data-name="${esc(u.username)}">Remove</button>` : ''}
+      </li>`).join('')}</ul>
+    </section>
+  </div>`;
+  $('#tileForm').onsubmit = async (e) => {
+    e.preventDefault();
+    try { await api('/tiles', { method: 'POST', body: { text: $('#tileText').value } }); renderGM(); }
+    catch (err) { $('#tileErr').textContent = err.message; }
+  };
+  app.onclick = async (e) => {
+    if (location.hash !== '#/gm') return;
+    const b = e.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset.del) await api('/tiles/' + b.dataset.del, { method: 'DELETE' });
+      else if (b.dataset.promote) await api(`/users/${b.dataset.promote}/promote`, { method: 'POST' });
+      else if (b.dataset.demote) await api(`/users/${b.dataset.demote}/demote`, { method: 'POST' });
+      else if (b.dataset.remove) {
+        if (!confirm(`Remove ${b.dataset.name}'s account and their cards in every game?`)) return;
+        await api('/users/' + b.dataset.remove, { method: 'DELETE' });
+      } else return;
+      renderGM();
+    } catch (err) { toast(err.message); }
+  };
+}
+
+// ---------- boot ----------
+api('/me').then(({ user }) => { me = user; renderUserbar(); route(); }).catch(() => route());
+</script>
+</body>
+</html>

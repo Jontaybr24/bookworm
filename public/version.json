@@ -1,6 +1,17 @@
 {
-  "version": "v0.0.0.7",
+  "version": "v0.0.0.8",
   "history": [
+    {
+      "version": "v0.0.0.8",
+      "date": "2026-11-07",
+      "notes": [
+        "Two simultaneous sign-ups can no longer take the same name or both become master",
+        "Forwarded addresses can no longer be faked to dodge rate limits",
+        "Wrong-password lockouts are per address, so others can't lock you out",
+        "Limits on current-password guesses, new games and book lookups",
+        "Expired sessions are cleaned up; HSTS over https"
+      ]
+    },
     {
       "version": "v0.0.0.7",
       "date": "2026-11-07",

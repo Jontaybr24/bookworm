@@ -80,6 +80,12 @@ if (!db.sessionsHashed) {
   db.sessionsHashed = true;
 }
 db.sessions = dict(db.sessions);
+function pruneSessions() {
+  let n = 0;
+  for (const [k, s] of Object.entries(db.sessions)) if (!(s.expires > Date.now()) || !db.users[s.userId]) { delete db.sessions[k]; n++; }
+  return n;
+}
+pruneSessions();
 function save() {
   const tmp = DATA_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
@@ -184,7 +190,7 @@ function addPlayer(g, uid) {
 // ---------- http plumbing ----------
 function send(res, status, body, headers = {}) {
   const data = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers });
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...hsts(res.req), ...headers });
   res.end(data);
 }
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -212,6 +218,7 @@ function cookies(req) {
 function isHttps(req) {
   return !!req.socket.encrypted || (TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https');
 }
+const hsts = (req) => (req && isHttps(req) ? { 'Strict-Transport-Security': 'max-age=31536000' } : {});
 function sessionCookie(req, token, maxAge) {
   return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
 }
@@ -236,7 +243,8 @@ function startSession(req, user) {
 // ---------- rate limits (in memory; reset on restart) ----------
 const hits = new Map();
 function clientIp(req) {
-  if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
+  // The proxy appends the address it saw to the end; anything before that came from the client and can be faked.
+  if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',').at(-1).trim() || '?';
   return req.socket.remoteAddress || '?';
 }
 // Counts an attempt under key; fails with 429 once there have been max attempts within the window.
@@ -247,6 +255,7 @@ function limit(key, max, windowMs, msg = 'Too many attempts — please wait a fe
   list.push(now); hits.set(key, list);
 }
 function clearLimit(key) { hits.delete(key); }
+setInterval(() => { if (pruneSessions()) save(); }, 864e5).unref();
 setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (!v.some((t) => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
 
 // ---------- security headers ----------
@@ -273,7 +282,7 @@ function serveStatic(req, res, pathname) {
   fs.readFile(file, (err, data) => {
     if (err) return send(res, 404, { error: 'Not found' });
     const ext = path.extname(file);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS,
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS, ...hsts(req),
       ...(ext === '.html' ? { 'Content-Security-Policy': PAGE_CSP } : {}) });
     res.end(data);
   });
@@ -342,19 +351,24 @@ async function api(req, res, url) {
     const password = typeof body.password === 'string' ? body.password : '';
     if (!/^[A-Za-z0-9_.-]{3,24}$/.test(username)) fail(400, 'Usernames are 3–24 letters, numbers, _ . or -');
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
+    // Hash before checking: there's no await between the checks and saving the account, so two sign-ups at the
+    // same moment can't both take one name (or both become the master).
+    const pw = await hashPassword(password);
     if (Object.values(db.users).some((u) => u.username.toLowerCase() === username.toLowerCase())) fail(409, 'That username is taken');
     const first = MASTER_USERNAME
       ? username.toLowerCase() === MASTER_USERNAME && !Object.values(db.users).some((u) => u.role === 'master')
       : Object.keys(db.users).length === 0;
-    const user = { id: newId(), username, role: first ? 'master' : 'player', friends: [], createdAt: Date.now(), ...(await hashPassword(password)) };
+    const user = { id: newId(), username, role: first ? 'master' : 'player', friends: [], createdAt: Date.now(), ...pw };
     db.users[user.id] = user;
     save();
     return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(req, user) });
   }
   if (route === 'POST /login') {
     const username = cleanStr(body.username, 24).toLowerCase();
-    const ipKey = 'login-ip|' + clientIp(req), userKey = 'login-user|' + username;
-    limit(ipKey, 30, 15 * 60e3); limit(userKey, 8, 15 * 60e3);
+    // Guessing one account is capped per address (8) and overall (50), so someone elsewhere can't lock you out with
+    // a few wrong tries, but a spread-out attack on one account still stalls.
+    const ip = clientIp(req), userKey = 'login-user|' + username + '|' + ip;
+    limit('login-ip|' + ip, 30, 15 * 60e3); limit(userKey, 8, 15 * 60e3); limit('login-any|' + username, 50, 15 * 60e3);
     const user = Object.values(db.users).find((u) => u.username.toLowerCase() === username);
     const { hash } = await hashPassword(String(body.password || ''), user ? user.salt : 'x');
     if (!user || !crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.hash, 'hex'))) fail(401, 'Wrong username or password');
@@ -370,6 +384,7 @@ async function api(req, res, url) {
   // Change your own password (needs the current one). Your other sessions are signed out; this one stays.
   if (route === 'POST /me/password') {
     need();
+    limit('pw|' + me.id, 8, 15 * 60e3);
     const { hash } = await hashPassword(String(body.current || ''), me.salt);
     if (!crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(me.hash, 'hex'))) fail(400, 'Your current password is wrong');
     const password = typeof body.password === 'string' ? body.password : '';
@@ -461,6 +476,7 @@ async function api(req, res, url) {
   }
   if (route === 'POST /games') {
     need();
+    limit('newgame|' + me.id, 20, 3600e3, 'You have made a lot of games — try again in a while');
     const name = cleanStr(body.name, 60) || fail(400, 'Give the game a name');
     if (!validDate(body.start) || !validDate(body.end)) fail(400, 'Pick a start and end date');
     if (body.end < body.start) fail(400, 'The end date must be on or after the start date');
@@ -650,12 +666,14 @@ async function api(req, res, url) {
   // --- books ---
   if (route === 'GET /books/search') {
     need();
+    limit('books|' + me.id, 60, 60e3, 'Searching too fast — wait a moment');
     const q = cleanStr(url.searchParams.get('q'), 120);
     if (q.length < 2) return send(res, 200, { books: [] });
     return send(res, 200, { books: await searchBooks(q) });
   }
   if (route === 'GET /books/description') {
     need();
+    limit('books|' + me.id, 60, 60e3, 'Searching too fast — wait a moment');
     return send(res, 200, { description: await bookDescription(String(url.searchParams.get('key') || '')) });
   }
 

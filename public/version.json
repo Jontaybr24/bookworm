@@ -1,6 +1,13 @@
 {
-  "version": "v0.0.0.8",
+  "version": "v0.0.0.9",
   "history": [
+    {
+      "version": "v0.0.0.9",
+      "date": "2026-11-07",
+      "notes": [
+        "Smooth gilt bands on the leaning book in the title"
+      ]
+    },
     {
       "version": "v0.0.0.8",
       "date": "2026-11-07",

@@ -61,9 +61,8 @@ body.auth-mode header.top { --s: 1; flex-direction: column; align-items: center;
   --b1: calc(9px * var(--s)); --b2: calc(11px * var(--s)); --b3: calc(15px * var(--s)); --b4: calc(16px * var(--s) + .5px);
   width: calc(var(--w) * var(--s)); height: calc(var(--h) * var(--s));
   display: flex; align-items: center; justify-content: center;
+  position: relative;
   background:
-    linear-gradient(180deg, transparent var(--b1), var(--t) var(--b1) var(--b2), transparent var(--b2) var(--b3), var(--t) var(--b3) var(--b4), transparent var(--b4)),
-    linear-gradient(0deg, transparent var(--b1), var(--t) var(--b1) var(--b2), transparent var(--b2) var(--b3), var(--t) var(--b3) var(--b4), transparent var(--b4)),
     linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 28%, rgba(255,255,255,.02) 55%, rgba(0,0,0,.30)),
     var(--c);
   border-radius: 3px 3px 1px 1px;
@@ -75,7 +74,15 @@ body.auth-mode header.top { --s: 1; flex-direction: column; align-items: center;
   font-weight: 400; line-height: 1;
   transform-origin: bottom left;
 }
-.spine.lean { transform: rotate(5deg) translateX(calc(4px * var(--s))); margin-left: calc(6px * var(--s)); }
+/* The gilt bands top and bottom are borders, not hard-edged gradients: borders stay smooth on the leaning spine. */
+.spine::before, .spine::after {
+  content: ''; position: absolute; left: 0; right: 0; box-sizing: border-box; pointer-events: none;
+  height: calc(var(--b4) - var(--b1)); border: 0 solid var(--t);
+}
+.spine::before { top: var(--b1); border-top-width: calc(var(--b2) - var(--b1)); border-bottom-width: calc(var(--b4) - var(--b3)); }
+.spine::after { bottom: var(--b1); border-bottom-width: calc(var(--b2) - var(--b1)); border-top-width: calc(var(--b4) - var(--b3)); }
+.spine.lean { transform: rotate(5deg) translateX(calc(4px * var(--s))); margin-left: calc(6px * var(--s));
+  backface-visibility: hidden; outline: 1px solid transparent; }
 .plank {
   height: calc(16px * var(--s) + 3px); margin-top: 0;
   background: linear-gradient(180deg, #7a5131 0%, #5b3a24 45%, #3a2417 100%);

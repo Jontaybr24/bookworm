@@ -19,6 +19,11 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const COOKIE = 'bw_session';
 const SESSION_DAYS = 30;
 const MAX_BODY = 64 * 1024;
+// Set TRUST_PROXY=1 only when running behind a reverse proxy you control: it makes the server believe
+// X-Forwarded-For (for rate limits) and X-Forwarded-Proto (to mark the session cookie Secure).
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+// Optional: set MASTER_USERNAME so only that username can become the master, instead of whoever registers first.
+const MASTER_USERNAME = (process.env.MASTER_USERNAME || '').trim().toLowerCase();
 
 const DEFAULT_TILES = [
   'A book set in a library', 'A book with a map inside', 'A debut novel', 'A book over 500 pages',
@@ -36,9 +41,12 @@ const DEFAULT_TILES = [
 ];
 
 // ---------- storage ----------
+const dict = (o = {}) => Object.assign(Object.create(null), o);
+const tokenKey = (token) => crypto.createHash('sha256').update(token).digest('hex');
 function emptyData() {
   return {
-    users: {}, sessions: {}, games: {},
+    sessionsHashed: true,
+    users: dict(), sessions: dict(), games: dict(),
     tiles: DEFAULT_TILES.map((text) => ({ id: newId(), text })),
   };
 }
@@ -60,6 +68,15 @@ let db = load();
 db.friendRequests ||= [];   // [{ from, to, at }] — pending; accepting moves both into each other's friends
 db.invites ||= [];          // [{ gameId, from, to, at }] — pending game invitations
 for (const u of Object.values(db.users)) u.friends ||= [];
+// Maps keyed by ids get no prototype, so a lookup like db.users['__proto__'] is just undefined.
+db.users = dict(db.users); db.games = dict(db.games);
+for (const g of Object.values(db.games)) { g.players = dict(g.players); for (const p of Object.values(g.players)) p.squares = dict(p.squares); }
+// Data files from before v0.0.0.5 stored raw session tokens; keep those sessions working by re-keying them by hash.
+if (!db.sessionsHashed) {
+  db.sessions = Object.fromEntries(Object.entries(db.sessions || {}).map(([t, v]) => [tokenKey(t), v]));
+  db.sessionsHashed = true;
+}
+db.sessions = dict(db.sessions);
 function save() {
   const tmp = DATA_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
@@ -157,13 +174,13 @@ function addPlayer(g, uid) {
   if (g.players[uid]) return;
   const order = shuffle([...Array(g.tiles.length).keys()]);
   if (g.freeCenter) order.splice(12, 0, null);
-  g.players[uid] = { order, squares: {}, joinedAt: Date.now() };
+  g.players[uid] = { order, squares: dict(), joinedAt: Date.now() };
 }
 
 // ---------- http plumbing ----------
 function send(res, status, body, headers = {}) {
   const data = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SECURITY_HEADERS, ...headers });
   res.end(data);
 }
 class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -186,34 +203,74 @@ function readBody(req) {
   });
 }
 function cookies(req) {
-  return Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]));
+  return dict(Object.fromEntries((req.headers.cookie || '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0])));
 }
-function sessionCookie(token, maxAge) {
-  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+function isHttps(req) {
+  return !!req.socket.encrypted || (TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https');
+}
+function sessionCookie(req, token, maxAge) {
+  return `${COOKIE}=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${isHttps(req) ? '; Secure' : ''}`;
+}
+function sessionKey(req) {
+  const token = cookies(req)[COOKIE];
+  return token && /^[0-9a-f]{64}$/.test(token) ? tokenKey(token) : null;
 }
 function currentUser(req) {
-  const token = cookies(req)[COOKIE];
-  const s = token && db.sessions[token];
+  const key = sessionKey(req);
+  const s = key && db.sessions[key];
   if (!s) return null;
-  if (s.expires < Date.now()) { delete db.sessions[token]; save(); return null; }
+  if (s.expires < Date.now()) { delete db.sessions[key]; save(); return null; }
   return db.users[s.userId] || null;
 }
-function startSession(user) {
+function startSession(req, user) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.sessions[token] = { userId: user.id, expires: Date.now() + SESSION_DAYS * 864e5 };
+  db.sessions[tokenKey(token)] = { userId: user.id, expires: Date.now() + SESSION_DAYS * 864e5 };
   save();
-  return sessionCookie(token, SESSION_DAYS * 86400);
+  return sessionCookie(req, token, SESSION_DAYS * 86400);
 }
+
+// ---------- rate limits (in memory; reset on restart) ----------
+const hits = new Map();
+function clientIp(req) {
+  if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim();
+  return req.socket.remoteAddress || '?';
+}
+// Counts an attempt under key; fails with 429 once there have been max attempts within the window.
+function limit(key, max, windowMs, msg = 'Too many attempts — please wait a few minutes and try again') {
+  const now = Date.now();
+  const list = (hits.get(key) || []).filter((t) => now - t < windowMs);
+  if (list.length >= max) { hits.set(key, list); fail(429, msg); }
+  list.push(now); hits.set(key, list);
+}
+function clearLimit(key) { hits.delete(key); }
+setInterval(() => { const now = Date.now(); for (const [k, v] of hits) if (!v.some((t) => now - t < 3600e3)) hits.delete(k); }, 600e3).unref();
+
+// ---------- security headers ----------
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'same-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+};
+const PAGE_CSP = [
+  "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src https://fonts.gstatic.com", "img-src 'self' data: https://covers.openlibrary.org https://archive.org https://*.archive.org",
+  "connect-src 'self'", "frame-ancestors 'none'", "base-uri 'none'", "form-action 'self'", "object-src 'none'",
+].join('; ');
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webp': 'image/webp' };
 function serveStatic(req, res, pathname) {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try { rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, ''); }
+  catch { return send(res, 400, { error: 'Bad address' }); }
   const file = path.join(PUBLIC_DIR, rel);
   if (!file.startsWith(PUBLIC_DIR + path.sep)) return send(res, 404, { error: 'Not found' });
   fs.readFile(file, (err, data) => {
     if (err) return send(res, 404, { error: 'Not found' });
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    const ext = path.extname(file);
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS,
+      ...(ext === '.html' ? { 'Content-Security-Policy': PAGE_CSP } : {}) });
     res.end(data);
   });
 }
@@ -253,6 +310,20 @@ async function api(req, res, url) {
   // "/games/abc123/leave" becomes "POST /games/:id/leave"; the real id stays in parts[1].
   const hasId = ['users', 'tiles', 'games', 'friends', 'invites'].includes(parts[0]) && parts[1] && parts[1] !== 'join';
   const route = `${method} /${parts.map((p, i) => (i === 1 && hasId ? ':id' : p)).join('/')}`;
+  // Changes may only come from this site's own page. Browsers mark cross-site requests with Sec-Fetch-Site and Origin;
+  // SameSite=Lax alone would still let a page on another port of the same host (a "same-site" page) act as the user.
+  if (method !== 'GET' && method !== 'HEAD') {
+    // Sec-Fetch-Site is set by the browser itself, so it's trusted first; Origin vs Host covers browsers without it.
+    const site = req.headers['sec-fetch-site'];
+    const origin = req.headers.origin;
+    let crossSite;
+    if (site) crossSite = site !== 'same-origin' && site !== 'none';
+    else if (origin) {
+      const host = (TRUST_PROXY && req.headers['x-forwarded-host']) || req.headers.host;
+      try { crossSite = new URL(origin).host !== host; } catch { crossSite = true; }
+    }
+    if (crossSite) fail(403, 'Cross-site request blocked');
+  }
   const body = ['POST', 'PUT', 'DELETE'].includes(method) ? await readBody(req) : {};
   const me = currentUser(req);
   const need = () => me || fail(401, 'Please sign in');
@@ -261,28 +332,34 @@ async function api(req, res, url) {
 
   // --- accounts ---
   if (route === 'POST /register') {
+    limit('reg|' + clientIp(req), 10, 3600e3, 'Too many new accounts from here — try again later');
     const username = cleanStr(body.username, 24);
     const password = typeof body.password === 'string' ? body.password : '';
     if (!/^[A-Za-z0-9_.-]{3,24}$/.test(username)) fail(400, 'Usernames are 3–24 letters, numbers, _ . or -');
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
     if (Object.values(db.users).some((u) => u.username.toLowerCase() === username.toLowerCase())) fail(409, 'That username is taken');
-    const first = Object.keys(db.users).length === 0;
+    const first = MASTER_USERNAME
+      ? username.toLowerCase() === MASTER_USERNAME && !Object.values(db.users).some((u) => u.role === 'master')
+      : Object.keys(db.users).length === 0;
     const user = { id: newId(), username, role: first ? 'master' : 'player', friends: [], createdAt: Date.now(), ...(await hashPassword(password)) };
     db.users[user.id] = user;
     save();
-    return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(user) });
+    return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(req, user) });
   }
   if (route === 'POST /login') {
     const username = cleanStr(body.username, 24).toLowerCase();
+    const ipKey = 'login-ip|' + clientIp(req), userKey = 'login-user|' + username;
+    limit(ipKey, 30, 15 * 60e3); limit(userKey, 8, 15 * 60e3);
     const user = Object.values(db.users).find((u) => u.username.toLowerCase() === username);
     const { hash } = await hashPassword(String(body.password || ''), user ? user.salt : 'x');
     if (!user || !crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.hash, 'hex'))) fail(401, 'Wrong username or password');
-    return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(user) });
+    clearLimit(userKey);
+    return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(req, user) });
   }
   if (route === 'POST /logout') {
-    const token = cookies(req)[COOKIE];
-    if (token) { delete db.sessions[token]; save(); }
-    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie('', 0) });
+    const key = sessionKey(req);
+    if (key) { delete db.sessions[key]; save(); }
+    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   }
   if (route === 'GET /me') return send(res, 200, { user: publicUser(me) });
   // Change your own password (needs the current one). Your other sessions are signed out; this one stays.
@@ -293,7 +370,7 @@ async function api(req, res, url) {
     const password = typeof body.password === 'string' ? body.password : '';
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
     Object.assign(me, await hashPassword(password));
-    const keep = cookies(req)[COOKIE];
+    const keep = sessionKey(req);
     for (const [t, s] of Object.entries(db.sessions)) if (s.userId === me.id && t !== keep) delete db.sessions[t];
     save();
     return send(res, 200, { ok: true });
@@ -318,7 +395,7 @@ async function api(req, res, url) {
     const password = typeof body.password === 'string' ? body.password : '';
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
     Object.assign(u, await hashPassword(password));
-    const keep = u.id === me.id ? cookies(req)[COOKIE] : null;
+    const keep = u.id === me.id ? sessionKey(req) : null;
     for (const [t, s] of Object.entries(db.sessions)) if (s.userId === u.id && t !== keep) delete db.sessions[t];
     save();
     return send(res, 200, { ok: true });
@@ -383,7 +460,7 @@ async function api(req, res, url) {
     const g = {
       id: newId(), code: newCode(), name, start: body.start, end: body.end, creatorId: me.id, createdAt: Date.now(), freeCenter: true,
       tiles: picked.map((text, i) => ({ id: i, text, custom: custom.some((c) => c.toLowerCase() === text.toLowerCase()) })),
-      players: {},
+      players: dict(),
     };
     addPlayer(g, me.id);
     db.games[g.id] = g; save();
@@ -392,7 +469,8 @@ async function api(req, res, url) {
   if (route === 'POST /games/join') {
     need();
     const code = cleanStr(body.code, 12).toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const g = Object.values(db.games).find((x) => x.code === code) || fail(404, 'No game has that code');
+    const g = Object.values(db.games).find((x) => x.code === code);
+    if (!g) { limit('join|' + me.id, 20, 15 * 60e3, 'Too many wrong codes — please wait a few minutes'); fail(404, 'No game has that code'); }
     if (gameStatus(g) === 'ended') fail(400, 'That game has already ended');
     addPlayer(g, me.id); save();
     return send(res, 200, { game: gameView(g, me) });

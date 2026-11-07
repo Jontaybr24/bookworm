@@ -1,6 +1,17 @@
 {
-  "version": "v0.0.0.4",
+  "version": "v0.0.0.5",
   "history": [
+    {
+      "version": "v0.0.0.5",
+      "date": "2026-11-07",
+      "notes": [
+        "Security pass: fixed a way for odd account ids to corrupt the server's internal objects",
+        "Requests from other websites can no longer act on your behalf",
+        "Sign-in, sign-up and game-code guessing are rate limited",
+        "Session tokens are stored hashed; security headers (CSP, no framing) added",
+        "Optional MASTER_USERNAME and TRUST_PROXY settings for deployment"
+      ]
+    },
     {
       "version": "v0.0.0.4",
       "date": "2026-11-07",

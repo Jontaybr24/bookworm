@@ -1,6 +1,16 @@
 {
-  "version": "v0.0.0.1",
+  "version": "v0.0.0.2",
   "history": [
+    {
+      "version": "v0.0.0.2",
+      "date": "2026-11-07",
+      "notes": [
+        "Title shelf is full size and centered on the sign-in page, and compact beside the menus everywhere else",
+        "Friends: send a request to anyone you share a game with; accept, decline or remove on the new Friends tab",
+        "Invite friends to a game from a scrollable checklist; a game with only you in it prompts you to invite",
+        "Invitations appear on the View games tab with Join and Decline"
+      ]
+    },
     {
       "version": "v0.0.0.1",
       "date": "2026-11-07",

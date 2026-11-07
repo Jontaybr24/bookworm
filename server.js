@@ -56,6 +56,10 @@ function load() {
   }
 }
 let db = load();
+// Fields added after v0.0.0.1 (friends and invites), filled in for data files made before them.
+db.friendRequests ||= [];   // [{ from, to, at }] — pending; accepting moves both into each other's friends
+db.invites ||= [];          // [{ gameId, from, to, at }] — pending game invitations
+for (const u of Object.values(db.users)) u.friends ||= [];
 function save() {
   const tmp = DATA_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db, null, 2), { mode: 0o600 });
@@ -237,7 +241,7 @@ async function api(req, res, url) {
   const method = req.method;
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
   // "/games/abc123/leave" becomes "POST /games/:id/leave"; the real id stays in parts[1].
-  const hasId = ['users', 'tiles', 'games'].includes(parts[0]) && parts[1] && parts[1] !== 'join';
+  const hasId = ['users', 'tiles', 'games', 'friends', 'invites'].includes(parts[0]) && parts[1] && parts[1] !== 'join';
   const route = `${method} /${parts.map((p, i) => (i === 1 && hasId ? ':id' : p)).join('/')}`;
   const body = ['POST', 'PUT', 'DELETE'].includes(method) ? await readBody(req) : {};
   const me = currentUser(req);
@@ -253,7 +257,7 @@ async function api(req, res, url) {
     if (password.length < 6) fail(400, 'Passwords need at least 6 characters');
     if (Object.values(db.users).some((u) => u.username.toLowerCase() === username.toLowerCase())) fail(409, 'That username is taken');
     const first = Object.keys(db.users).length === 0;
-    const user = { id: newId(), username, role: first ? 'master' : 'player', createdAt: Date.now(), ...(await hashPassword(password)) };
+    const user = { id: newId(), username, role: first ? 'master' : 'player', friends: [], createdAt: Date.now(), ...(await hashPassword(password)) };
     db.users[user.id] = user;
     save();
     return send(res, 200, { user: publicUser(user) }, { 'Set-Cookie': startSession(user) });
@@ -296,6 +300,9 @@ async function api(req, res, url) {
     delete db.users[u.id];
     for (const [t, s] of Object.entries(db.sessions)) if (s.userId === u.id) delete db.sessions[t];
     for (const g of Object.values(db.games)) delete g.players[u.id];
+    for (const other of Object.values(db.users)) other.friends = other.friends.filter((id) => id !== u.id);
+    db.friendRequests = db.friendRequests.filter((r) => r.from !== u.id && r.to !== u.id);
+    db.invites = db.invites.filter((i) => i.from !== u.id && i.to !== u.id);
     save();
     return send(res, 200, { ok: true });
   }
@@ -365,7 +372,99 @@ async function api(req, res, url) {
     const g = db.games[parts[1]];
     if (!g || !canView(g, me)) fail(404, 'Game not found');
     if (g.creatorId !== me.id && me.role !== 'master') fail(403, 'Only the creator or the master can delete a game');
-    delete db.games[g.id]; save();
+    delete db.games[g.id];
+    db.invites = db.invites.filter((i) => i.gameId !== g.id);
+    save();
+    return send(res, 200, { ok: true });
+  }
+
+  // --- friends: you can befriend anyone who shares a game with you; they accept the request ---
+  const nameOf = (id) => ({ id, username: db.users[id]?.username || '(removed)' });
+  if (route === 'GET /friends') {
+    need();
+    return send(res, 200, {
+      friends: me.friends.map(nameOf).sort((a, b) => a.username.localeCompare(b.username)),
+      incoming: db.friendRequests.filter((r) => r.to === me.id).map((r) => nameOf(r.from)),
+      outgoing: db.friendRequests.filter((r) => r.from === me.id).map((r) => nameOf(r.to)),
+    });
+  }
+  if (route === 'POST /friends/:id') {
+    need();
+    const other = db.users[parts[1]] || fail(404, 'No such reader');
+    if (other.id === me.id) fail(400, "You can't befriend yourself");
+    if (me.friends.includes(other.id)) return send(res, 200, { status: 'friends' });
+    // If they already asked you, sending one back is the same as accepting.
+    const theirs = db.friendRequests.find((r) => r.from === other.id && r.to === me.id);
+    if (theirs) {
+      db.friendRequests = db.friendRequests.filter((r) => r !== theirs);
+      me.friends.push(other.id); other.friends.push(me.id); save();
+      return send(res, 200, { status: 'friends' });
+    }
+    const shareGame = Object.values(db.games).some((g) => g.players[me.id] && g.players[other.id]);
+    if (!shareGame) fail(403, 'You can only add friends you share a game with');
+    if (!db.friendRequests.some((r) => r.from === me.id && r.to === other.id)) {
+      db.friendRequests.push({ from: me.id, to: other.id, at: Date.now() }); save();
+    }
+    return send(res, 200, { status: 'requested' });
+  }
+  if (route === 'POST /friends/:id/accept') {
+    need();
+    const req0 = db.friendRequests.find((r) => r.from === parts[1] && r.to === me.id) || fail(404, 'No such request');
+    const other = db.users[req0.from];
+    db.friendRequests = db.friendRequests.filter((r) => r !== req0);
+    if (other && !me.friends.includes(other.id)) { me.friends.push(other.id); other.friends.push(me.id); }
+    save();
+    return send(res, 200, { status: 'friends' });
+  }
+  // Declines a request to you, cancels one from you, or ends a friendship — whichever applies.
+  if (route === 'DELETE /friends/:id') {
+    need();
+    const id = parts[1];
+    db.friendRequests = db.friendRequests.filter((r) => !((r.from === id && r.to === me.id) || (r.from === me.id && r.to === id)));
+    me.friends = me.friends.filter((f) => f !== id);
+    if (db.users[id]) db.users[id].friends = db.users[id].friends.filter((f) => f !== me.id);
+    save();
+    return send(res, 200, { ok: true });
+  }
+
+  // --- game invitations (to friends only) ---
+  if (route === 'POST /games/:id/invite') {
+    need();
+    const g = db.games[parts[1]];
+    if (!g || !isMember(g, me)) fail(404, 'Game not found');
+    if (gameStatus(g) === 'ended') fail(400, 'This game has ended');
+    const ids = (Array.isArray(body.userIds) ? body.userIds : []).filter((id) => me.friends.includes(id) && !g.players[id]);
+    let sent = 0;
+    for (const to of ids) {
+      if (db.invites.some((i) => i.gameId === g.id && i.to === to)) continue;
+      db.invites.push({ gameId: g.id, from: me.id, to, at: Date.now() }); sent++;
+    }
+    save();
+    return send(res, 200, { sent });
+  }
+  if (route === 'GET /invites') {
+    need();
+    db.invites = db.invites.filter((i) => db.games[i.gameId]); // drop invites to deleted games
+    const mine = db.invites.filter((i) => i.to === me.id && gameStatus(db.games[i.gameId]) !== 'ended' && !db.games[i.gameId].players[me.id]);
+    return send(res, 200, { invites: mine.map((i) => {
+      const g = db.games[i.gameId];
+      return { gameId: g.id, name: g.name, start: g.start, end: g.end, status: gameStatus(g), from: nameOf(i.from).username, playerCount: Object.keys(g.players).length };
+    }) });
+  }
+  if (route === 'POST /invites/:id/accept') {
+    need();
+    const inv = db.invites.find((i) => i.gameId === parts[1] && i.to === me.id) || fail(404, 'No such invitation');
+    const g = db.games[inv.gameId] || fail(404, 'That game no longer exists');
+    if (gameStatus(g) === 'ended') fail(400, 'That game has already ended');
+    addPlayer(g, me.id);
+    db.invites = db.invites.filter((i) => !(i.gameId === g.id && i.to === me.id));
+    save();
+    return send(res, 200, { game: gameView(g, me) });
+  }
+  if (route === 'DELETE /invites/:id') {
+    need();
+    db.invites = db.invites.filter((i) => !(i.gameId === parts[1] && i.to === me.id));
+    save();
     return send(res, 200, { ok: true });
   }
   if (route === 'POST /games/:id/leave') {

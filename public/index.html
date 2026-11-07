@@ -47,40 +47,54 @@ a { color: var(--oxblood); }
 [hidden] { display: none !important; }
 
 /* ---------- title: a shelf of books, one letter per spine ---------- */
+/* --s scales the whole shelf: full size on the sign-in page, compact beside the menus everywhere else. */
 header.top {
-  max-width: 1280px; margin: 0 auto; padding: 26px 16px 0;
-  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  --s: .46;
+  max-width: 1280px; margin: 0 auto; padding: 14px 16px 0;
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap;
 }
+body.auth-mode header.top { --s: 1; flex-direction: column; align-items: center; padding-top: 44px; }
 .shelf-title { position: relative; display: inline-flex; flex-direction: column; text-decoration: none; }
-.shelf-title h1 { margin: 0; display: flex; align-items: flex-end; gap: 3px; padding: 0 14px; }
+.shelf-title h1 { margin: 0; display: flex; align-items: flex-end; gap: calc(3px * var(--s) + 1px); padding: 0 calc(14px * var(--s)); }
 .spine {
   --h: 108px; --w: 52px; --c: #7a2e2a; --t: var(--brass-bright);
-  width: var(--w); height: var(--h);
+  --b1: calc(9px * var(--s)); --b2: calc(11px * var(--s)); --b3: calc(15px * var(--s)); --b4: calc(16px * var(--s) + .5px);
+  width: calc(var(--w) * var(--s)); height: calc(var(--h) * var(--s));
   display: flex; align-items: center; justify-content: center;
   background:
-    linear-gradient(180deg, transparent 9px, var(--t) 9px 11px, transparent 11px 15px, var(--t) 15px 16px, transparent 16px),
-    linear-gradient(0deg, transparent 9px, var(--t) 9px 11px, transparent 11px 15px, var(--t) 15px 16px, transparent 16px),
+    linear-gradient(180deg, transparent var(--b1), var(--t) var(--b1) var(--b2), transparent var(--b2) var(--b3), var(--t) var(--b3) var(--b4), transparent var(--b4)),
+    linear-gradient(0deg, transparent var(--b1), var(--t) var(--b1) var(--b2), transparent var(--b2) var(--b3), var(--t) var(--b3) var(--b4), transparent var(--b4)),
     linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.10) 28%, rgba(255,255,255,.02) 55%, rgba(0,0,0,.30)),
     var(--c);
   border-radius: 3px 3px 1px 1px;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 2px 0 3px rgba(0,0,0,.35);
   font-family: 'Abril Fatface', var(--display);
-  font-size: calc(var(--w) * .62);
+  font-size: calc(var(--w) * var(--s) * .62);
   color: var(--t);
   text-shadow: 0 1px 0 rgba(0,0,0,.35);
   font-weight: 400; line-height: 1;
   transform-origin: bottom left;
 }
-.spine.lean { transform: rotate(5deg) translateX(4px); margin-left: 6px; }
+.spine.lean { transform: rotate(5deg) translateX(calc(4px * var(--s))); margin-left: calc(6px * var(--s)); }
 .plank {
-  height: 16px; margin-top: 0;
+  height: calc(16px * var(--s) + 3px); margin-top: 0;
   background: linear-gradient(180deg, #7a5131 0%, #5b3a24 45%, #3a2417 100%);
   border-radius: 2px;
   box-shadow: 0 8px 12px -4px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.15);
 }
-.plank::after { content: ''; display: block; height: 5px; margin: 16px 10px 0; background: rgba(0,0,0,.35); filter: blur(4px); }
+.plank::after { content: ''; display: block; height: 5px; margin: calc(16px * var(--s)) 10px 0; background: rgba(0,0,0,.35); filter: blur(4px); }
 
-nav.userbar { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; padding-bottom: 8px; color: var(--paper-2); }
+nav.userbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 10px; color: var(--paper-2); font-size: 16px; }
+.badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--oxblood); color: var(--paper); font-family: var(--serif); font-size: 13px; line-height: 18px; text-align: center; }
+.invite-strip { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--paper-edge); border-left: 4px solid var(--oxblood); background: #fffaf0; border-radius: 3px; }
+.invite-strip .list li { border-bottom: 0; }
+.checklist { max-height: 300px; overflow: auto; border: 1px solid var(--paper-edge); background: #fffaf0; border-radius: var(--radius); padding: 6px; margin: 10px 0; }
+.checklist label { font-family: var(--serif); font-weight: 400; display: flex; gap: 10px; align-items: center; padding: 6px; margin: 0; cursor: pointer; border-radius: 3px; }
+.checklist label:hover { background: rgba(0,0,0,.04); }
+.checklist input { accent-color: var(--oxblood); width: 17px; height: 17px; }
+.checklist .muted { margin-left: auto; font-size: 14px; }
+.empty-invite { margin-top: 18px; padding: 16px; border: 2px dashed var(--paper-edge); border-radius: 4px; text-align: center; }
+.players .friend-btn { flex: none; }
 nav.userbar .who { font-style: italic; margin-right: 6px; }
 nav.userbar .role { font-family: var(--display); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 13px; color: var(--brass); margin-left: 4px; }
 
@@ -278,7 +292,9 @@ aside .paper + .paper { margin-top: 18px; }
 }
 @media (max-width: 640px) {
   body { font-size: 17px; }
-  .spine { --w: 34px !important; height: calc(var(--h) * .68) !important; }
+  header.top { --s: .4; }
+  body.auth-mode header.top { --s: .62; }
+  nav.userbar .who { flex-basis: 100%; }
   .paper { padding: 16px; }
   .board { gap: 4px; }
   .tile .topic { font-size: 10px; padding: 3px; }
@@ -410,13 +426,17 @@ async function route() {
   clearInterval(pollTimer); pollTimer = null;
   closeModal();
   const hash = location.hash || '#/';
+  document.body.classList.toggle('auth-mode', !me);
   if (!me) return renderAuth(hash === '#/register' ? 'register' : 'login');
   if (hash === '#/login' || hash === '#/register') { location.hash = '#/'; return; }
   const m = hash.match(/^#\/game\/([\w-]+)/);
   if (m) return renderGame(m[1]);
   if (hash === '#/gm' && me.isGM) return renderGM();
-  const tab = (hash.match(/^#\/(create|join|view)$/) || [])[1] || 'view';
+  const tab = (hash.match(/^#\/(create|join|view|friends)$/) || [])[1] || 'view';
   return renderLobby(tab);
+}
+async function loadFriends() {
+  try { return await api('/friends'); } catch { return { friends: [], incoming: [], outgoing: [] }; }
 }
 window.addEventListener('hashchange', route);
 
@@ -449,25 +469,62 @@ function renderAuth(mode) {
 
 // ---------- lobby: create / join / view ----------
 async function renderLobby(tab) {
-  const tabs = [['view', 'View games'], ['create', 'Create a game'], ['join', 'Join a game']];
-  app.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, l]) =>
-    `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}</button>`).join('')}</div>
+  const [fr, { invites }] = await Promise.all([loadFriends(), api('/invites').catch(() => ({ invites: [] }))]);
+  const badge = (n) => (n ? `<span class="badge">${n}</span>` : '');
+  const tabs = [['view', 'View games', badge(invites.length)], ['create', 'Create a game', ''], ['join', 'Join a game', ''], ['friends', 'Friends', badge(fr.incoming.length)]];
+  app.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, l, b]) =>
+    `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}${b}</button>`).join('')}</div>
     <section class="paper tabpanel" id="panel"></section>`;
   app.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => (location.hash = '#/' + b.dataset.tab)));
   const panel = $('#panel');
-  if (tab === 'view') return renderView(panel);
+  if (tab === 'view') return renderView(panel, invites);
   if (tab === 'create') return renderCreate(panel);
+  if (tab === 'friends') return renderFriends(panel, fr);
   return renderJoin(panel);
 }
 
-async function renderView(panel) {
+function renderFriends(panel, fr) {
+  const row = (u, buttons) => `<li><span>${esc(u.username)}</span>${buttons}</li>`;
+  panel.innerHTML = `<h2>Friends</h2>
+    <p class="muted small">Add friends from the readers list inside any game you share. Friends can invite each other to games.</p>
+    ${fr.incoming.length ? `<h3>Friend requests</h3><ul class="list" style="margin-bottom:18px">${fr.incoming.map((u) => row(u,
+      `<button class="btn green sm" data-accept="${esc(u.id)}">Accept</button><button class="btn ghost sm" data-drop="${esc(u.id)}">Decline</button>`)).join('')}</ul>` : ''}
+    <h3>Your friends</h3>
+    ${fr.friends.length ? `<ul class="list">${fr.friends.map((u) => row(u, `<button class="btn ghost sm" data-drop="${esc(u.id)}" data-confirm="Remove ${esc(u.username)} from your friends?">Remove</button>`)).join('')}</ul>`
+      : '<p class="muted">No friends yet.</p>'}
+    ${fr.outgoing.length ? `<h3 style="margin-top:18px">Waiting on</h3><ul class="list">${fr.outgoing.map((u) => row(u, `<button class="btn ghost sm" data-drop="${esc(u.id)}">Cancel request</button>`)).join('')}</ul>` : ''}`;
+  panel.onclick = async (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    try {
+      if (b.dataset.accept) await api(`/friends/${b.dataset.accept}/accept`, { method: 'POST' });
+      else if (b.dataset.drop) {
+        if (b.dataset.confirm && !confirm(b.dataset.confirm)) return;
+        await api('/friends/' + b.dataset.drop, { method: 'DELETE' });
+      } else return;
+      renderLobby('friends');
+    } catch (err) { toast(err.message); }
+  };
+}
+
+async function renderView(panel, invites = []) {
   panel.innerHTML = '<p class="muted">Pulling the catalogue drawer…</p>';
   const { games } = await api('/games');
+  const inviteHTML = invites.length ? `<div class="invite-strip"><h3>Invitations</h3><ul class="list">${invites.map((i) => `<li>
+      <span><b>${esc(i.name)}</b> <span class="muted small">from ${esc(i.from)} · ${fmtDate(i.start)} – ${fmtDate(i.end)} · ${i.playerCount} reader${i.playerCount === 1 ? '' : 's'}</span></span>
+      <button class="btn green sm" data-join="${esc(i.gameId)}">Join</button><button class="btn ghost sm" data-decline="${esc(i.gameId)}">Decline</button>
+    </li>`).join('')}</ul></div>` : '';
+  panel.onclick = async (e) => {
+    const b = e.target.closest('button[data-join], button[data-decline]'); if (!b) return;
+    try {
+      if (b.dataset.join) { await api(`/invites/${b.dataset.join}/accept`, { method: 'POST' }); location.hash = '#/game/' + b.dataset.join; }
+      else { await api('/invites/' + b.dataset.decline, { method: 'DELETE' }); renderLobby('view'); }
+    } catch (err) { toast(err.message); }
+  };
   if (!games.length) {
-    panel.innerHTML = `<h2>Your games</h2><p class="muted">You aren't in any games yet. <a href="#/create">Create one</a> or <a href="#/join">join with a code</a>.</p>`;
+    panel.innerHTML = `${inviteHTML}<h2>Your games</h2><p class="muted">You aren't in any games yet. <a href="#/create">Create one</a> or <a href="#/join">join with a code</a>.</p>`;
     return;
   }
-  panel.innerHTML = `<h2>${me.isMaster ? 'All games' : 'Your games'}</h2><div class="catalog">${games.map((g) => `
+  panel.innerHTML = `${inviteHTML}<h2>${me.isMaster ? 'All games' : 'Your games'}</h2><div class="catalog">${games.map((g) => `
     <button class="card-entry" data-id="${esc(g.id)}">
       <div class="name">${esc(g.name)}</div>
       <div class="meta"><span class="stamp ${g.status}">${g.status}</span> &nbsp;${fmtDate(g.start)} – ${fmtDate(g.end)}</div>
@@ -538,15 +595,53 @@ function renderJoin(panel) {
 
 // ---------- game ----------
 let game = null;
+let friendState = { friends: [], incoming: [], outgoing: [] };
 async function renderGame(id) {
   app.innerHTML = '<p style="color:var(--paper)">Opening the book…</p>';
-  try { ({ game } = await api('/games/' + id)); }
+  try { [{ game }, friendState] = await Promise.all([api('/games/' + id), loadFriends()]); }
   catch (err) { app.innerHTML = `<section class="paper"><h2>Game not found</h2><p>${esc(err.message)}</p><a class="btn" href="#/">Back to games</a></section>`; return; }
   drawGame();
   pollTimer = setInterval(async () => {
     if ($('#overlay')) return;
-    try { ({ game } = await api('/games/' + id)); drawGame(); } catch {}
+    try { [{ game }, friendState] = await Promise.all([api('/games/' + id), loadFriends()]); drawGame(); } catch {}
   }, 15000);
+}
+
+// The button beside another reader in the list: add, accept, pending, or already friends.
+function friendButton(p) {
+  const has = (list) => list.some((u) => u.id === p.id);
+  if (has(friendState.friends)) return '<span class="stamp active friend-btn" title="Friends">Friend</span>';
+  if (has(friendState.incoming)) return `<button class="btn green sm friend-btn" data-befriend="${esc(p.id)}">Accept</button>`;
+  if (has(friendState.outgoing)) return '<span class="muted small friend-btn">Requested</span>';
+  return `<button class="btn ghost sm friend-btn" data-befriend="${esc(p.id)}" title="Send a friend request">+ Friend</button>`;
+}
+
+function openInvite() {
+  const invitable = friendState.friends.filter((f) => !game.players.some((p) => p.id === f.id));
+  const modal = openModal(`<p class="eyebrow">${esc(game.name)}</p><h2>Invite friends</h2>
+    ${!friendState.friends.length ? `<p class="muted">You don't have any friends yet. Add readers you share a game with from the readers list, or share the game code <b>${esc(game.code)}</b>.</p>`
+      : !invitable.length ? '<p class="muted">All your friends are already in this game.</p>'
+      : `<p class="muted small">They'll see the invitation on their games page.</p>
+        <label class="small" style="font-weight:400;display:flex;gap:8px;align-items:center;font-family:var(--serif)"><input type="checkbox" id="all"> Select all</label>
+        <div class="checklist" id="friendList">${invitable.map((f) => `<label><input type="checkbox" value="${esc(f.id)}"> ${esc(f.username)}</label>`).join('')}</div>
+        <p class="error" id="err"></p>
+        <button class="btn primary" id="sendInvites" disabled>Send invitations</button>`}`);
+  const list = $('#friendList', modal); if (!list) return;
+  const boxes = () => [...list.querySelectorAll('input')];
+  const update = () => {
+    const n = boxes().filter((b) => b.checked).length;
+    $('#sendInvites', modal).disabled = !n;
+    $('#sendInvites', modal).textContent = n ? `Send ${n} invitation${n === 1 ? '' : 's'}` : 'Send invitations';
+    $('#all', modal).checked = n === boxes().length;
+  };
+  list.addEventListener('change', update);
+  $('#all', modal).onchange = (e) => { boxes().forEach((b) => (b.checked = e.target.checked)); update(); };
+  $('#sendInvites', modal).onclick = async () => {
+    try {
+      const { sent } = await api(`/games/${game.id}/invite`, { method: 'POST', body: { userIds: boxes().filter((b) => b.checked).map((b) => b.value) } });
+      closeModal(); toast(sent ? `Sent ${sent} invitation${sent === 1 ? '' : 's'}` : 'They were already invited');
+    } catch (err) { $('#err', modal).textContent = err.message; }
+  };
 }
 
 function drawGame() {
@@ -571,12 +666,17 @@ function drawGame() {
       ${mine ? `<div class="board" id="board">${boardHTML(mine)}</div>
         <div class="legend"><span class="l-read">Read</span><span class="l-plan">Planned</span><span class="l-shelf">Part of a shelf (bingo)</span></div>`
         : '<p class="muted">You are viewing this game as the master account and are not playing in it.</p>'}
+      ${mine && !others.length && game.status !== 'ended' ? `<div class="empty-invite">
+        <h3>It's just you so far</h3>
+        <p class="muted small" style="margin-top:0">Invite friends to this game, or share the code <b>${esc(game.code)}</b>.</p>
+        <button class="btn primary invite-btn">Invite friends</button></div>` : ''}
     </section>
     <aside>
       <div class="paper">
         <h3>Game code</h3>
         <div class="code-box"><code>${esc(game.code)}</code><button class="btn sm" id="copy">Copy</button></div>
-        <p class="muted small" style="margin:6px 0 0">Share it so friends can join.</p>
+        <p class="muted small" style="margin:6px 0 10px">Share it so others can join.</p>
+        ${mine && game.status !== 'ended' ? '<button class="btn green sm invite-btn">Invite friends</button>' : ''}
       </div>
       <div class="paper">
         <h3>Readers</h3>
@@ -584,6 +684,7 @@ function drawGame() {
           <span class="rank">${i + 1}</span>
           <span class="pname">${esc(p.username)}${p.id === me.id ? ' (you)' : ''}<small>${p.read} read · ${p.planned} planned</small></span>
           <span class="shelf-count" title="${p.shelves} shelves (bingos)">${miniBooks(p.shelves)}${p.shelves}</span>
+          ${mine && p.id !== me.id ? friendButton(p) : ''}
         </li>`).join('')}</ul>
         <p class="muted small" style="margin:8px 0 0">A <b>shelf</b> is a full row, column or diagonal of books read.</p>
       </div>
@@ -593,6 +694,14 @@ function drawGame() {
     <div class="others-grid">${others.map(otherHTML).join('')}</div></section>` : ''}`;
 
   if (mine) $('#board').querySelectorAll('.tile').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
+  app.querySelectorAll('.invite-btn').forEach((b) => (b.onclick = openInvite));
+  app.querySelectorAll('[data-befriend]').forEach((b) => (b.onclick = async () => {
+    try {
+      const { status } = await api('/friends/' + b.dataset.befriend, { method: 'POST' });
+      friendState = await loadFriends(); drawGame();
+      toast(status === 'friends' ? "You're now friends" : 'Friend request sent');
+    } catch (err) { toast(err.message); }
+  }));
   $('#copy').onclick = () => navigator.clipboard?.writeText(game.code).then(() => toast('Code copied'), () => toast(game.code));
   $('#leave') && ($('#leave').onclick = async () => {
     if (!confirm('Leave this game? Your card will be removed.')) return;

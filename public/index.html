@@ -95,6 +95,25 @@ nav.userbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; pad
 .checklist .muted { margin-left: auto; font-size: 14px; }
 .empty-invite { margin-top: 18px; padding: 16px; border: 2px dashed var(--paper-edge); border-radius: 4px; text-align: center; }
 .players .friend-btn { flex: none; }
+.friend-btn .short { display: none; }
+.players li.compact .friend-btn .full { display: none; }
+.players li.compact .friend-btn .short { display: inline; }
+.players li.compact .friend-btn { min-width: 28px; padding-left: 6px; padding-right: 6px; font-size: 16px; }
+.players li { gap: 8px; }
+.shelf-count { flex: none; }
+.lib-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-bottom: 16px; }
+.lib-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lib-tools input { width: 240px; max-width: 100%; }
+.seg { display: inline-flex; border: 1px solid #4a2f1d; border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; padding: 6px 12px; cursor: pointer; background: #fffaf0; font-family: var(--display); font-weight: 700; font-size: 16px; }
+.seg button[aria-pressed=true] { background: linear-gradient(180deg, #6b4429, #4a2f1d); color: var(--paper); }
+.archive { border: 1px solid var(--paper-edge); border-left: 4px solid var(--wood-light); background: #fffaf0; border-radius: 3px; padding: 12px 16px; margin-bottom: 10px; }
+.archive summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; list-style: none; }
+.archive summary::-webkit-details-marker { display: none; }
+.archive summary::before { content: '▸'; color: var(--ink-soft); transition: transform .15s; }
+.archive[open] summary::before { transform: rotate(90deg); }
+.archive .a-name { font-family: var(--display); font-weight: 700; font-size: 21px; }
+.archive .other { box-shadow: 0 2px 6px rgba(0,0,0,.15), inset 0 0 0 1px var(--paper-edge); }
 nav.userbar .who { font-style: italic; margin-right: 6px; }
 nav.userbar .role { font-family: var(--display); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 13px; color: var(--brass); margin-left: 4px; }
 
@@ -370,11 +389,29 @@ function shelfPositions(player) {
   LINES.filter((l) => l.every(read)).forEach((l) => l.forEach((p) => set.add(p)));
   return set;
 }
-function miniBooks(n) {
-  const colors = ['#7a2e2a', '#2f5140', '#26375a', '#b08227', '#5a2f4f', '#2c5a5f', '#9a4a24', '#3b4430'];
-  const shown = Math.min(n, 12);
-  return `<span class="mini-books" aria-hidden="true">${Array.from({ length: shown }, (_, i) =>
-    `<i style="background:${colors[i % colors.length]};height:${14 + ((i * 7) % 6)}px"></i>`).join('')}</span>`;
+// The 12 books a full shelf holds, as [colour, height, width]. Each reader gets them in their own order,
+// seeded by their id so a reader's shelf looks the same on every refresh and every screen.
+const SHELF_BOOKS = [
+  ['#7a2e2a', 18, 5], ['#2f5140', 15, 6], ['#26375a', 20, 5], ['#b08227', 16, 6], ['#5a2f4f', 19, 5], ['#2c5a5f', 14, 6],
+  ['#9a4a24', 17, 5], ['#3b4430', 20, 6], ['#8a6d3b', 15, 5], ['#4b2a2a', 18, 6], ['#2f3f4f', 16, 5], ['#6b7a3a', 19, 5],
+];
+const shelfOrders = new Map();
+function shelfOrder(seed) {
+  if (!shelfOrders.has(seed)) {
+    let h = 2166136261; for (const ch of String(seed)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const rand = () => ((h = Math.imul(h ^ (h >>> 15), 2246822507) ^ Math.imul(h ^ (h >>> 13), 3266489909)) >>> 0) / 4294967296;
+    const order = SHELF_BOOKS.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    shelfOrders.set(seed, order);
+  }
+  return shelfOrders.get(seed);
+}
+function miniBooks(n, seed) {
+  const order = shelfOrder(seed);
+  return `<span class="mini-books" aria-hidden="true">${order.slice(0, Math.min(n, 12)).map((b) => {
+    const [c, h, w] = SHELF_BOOKS[b];
+    return `<i style="background:${c};height:${h}px;width:${w}px"></i>`;
+  }).join('')}</span>`;
 }
 
 // ---------- modal ----------
@@ -432,7 +469,7 @@ async function route() {
   const m = hash.match(/^#\/game\/([\w-]+)/);
   if (m) return renderGame(m[1]);
   if (hash === '#/gm' && me.isGM) return renderGM();
-  const tab = (hash.match(/^#\/(create|join|view|friends)$/) || [])[1] || 'view';
+  const tab = (hash.match(/^#\/(create|join|view|friends|library)$/) || [])[1] || 'view';
   return renderLobby(tab);
 }
 async function loadFriends() {
@@ -471,7 +508,7 @@ function renderAuth(mode) {
 async function renderLobby(tab) {
   const [fr, { invites }] = await Promise.all([loadFriends(), api('/invites').catch(() => ({ invites: [] }))]);
   const badge = (n) => (n ? `<span class="badge">${n}</span>` : '');
-  const tabs = [['view', 'View games', badge(invites.length)], ['create', 'Create a game', ''], ['join', 'Join a game', ''], ['friends', 'Friends', badge(fr.incoming.length)]];
+  const tabs = [['view', 'View games', badge(invites.length)], ['create', 'Create a game', ''], ['join', 'Join a game', ''], ['friends', 'Friends', badge(fr.incoming.length)], ['library', 'Library', '']];
   app.innerHTML = `<div class="tabs" role="tablist">${tabs.map(([k, l, b]) =>
     `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}${b}</button>`).join('')}</div>
     <section class="paper tabpanel" id="panel"></section>`;
@@ -480,7 +517,56 @@ async function renderLobby(tab) {
   if (tab === 'view') return renderView(panel, invites);
   if (tab === 'create') return renderCreate(panel);
   if (tab === 'friends') return renderFriends(panel, fr);
+  if (tab === 'library') return renderLibrary(panel, fr);
   return renderJoin(panel);
+}
+
+// The Library: finished games. Readers see their own card and friends' cards; Gamemasters can switch to every archive.
+let libraryScope = 'mine';
+async function renderLibrary(panel, fr) {
+  if (!me.isGM) libraryScope = 'mine';
+  panel.innerHTML = '<p class="muted">Fetching the archives…</p>';
+  let games;
+  try { ({ games } = await api('/library' + (libraryScope === 'all' ? '?scope=all' : ''))); }
+  catch (err) { panel.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const friendIds = new Set(fr.friends.map((f) => f.id));
+  panel.innerHTML = `<div class="lib-head">
+      <div><h2>Library</h2><p class="muted small" style="margin:0">${libraryScope === 'all'
+        ? 'Every finished game, with every reader\'s card.'
+        : 'Finished games you played, with your card and your friends\' cards.'}</p></div>
+      <div class="lib-tools">
+        ${me.isGM ? `<div class="seg" role="group" aria-label="Library scope">
+          <button data-scope="mine" aria-pressed="${libraryScope === 'mine'}">My library</button>
+          <button data-scope="all" aria-pressed="${libraryScope === 'all'}">All archives</button></div>` : ''}
+        <input type="search" id="libSearch" placeholder="Search games or readers" aria-label="Search games or readers">
+      </div>
+    </div>
+    <div id="libList">${games.length ? games.map((g) => {
+      const mineCard = g.players.find((p) => p.id === me.id);
+      const rest = g.players.filter((p) => p.id !== me.id);
+      const search = [g.name, g.creator, ...g.players.map((p) => p.username)].join(' ').toLowerCase();
+      return `<details class="archive" data-search="${esc(search)}">
+        <summary>
+          <span class="a-name">${esc(g.name)}</span>
+          <span class="muted small">${fmtDate(g.start)} – ${fmtDate(g.end)} · ${g.playerCount} reader${g.playerCount === 1 ? '' : 's'}
+            ${mineCard ? ` · you: ${mineCard.read} read, ${mineCard.shelves} shel${mineCard.shelves === 1 ? 'f' : 'ves'}` : ''}
+            ${g.leaders.length ? ` · most shelves: ${esc(g.leaders.join(', '))} (${g.topShelves})` : ''}</span>
+        </summary>
+        <div class="others-grid" style="margin-top:14px">
+          ${mineCard ? otherHTML(mineCard, g.tiles, ' <span class="muted small">(you)</span>') : ''}
+          ${rest.map((p) => otherHTML(p, g.tiles, friendIds.has(p.id) ? ' <span class="stamp active" style="font-size:11px">Friend</span>' : '')).join('')}
+        </div>
+        ${libraryScope === 'mine' && g.playerCount > g.players.length ? `<p class="muted small" style="margin:10px 0 0">${g.playerCount - g.players.length} other reader${g.playerCount - g.players.length === 1 ? '' : 's'} in this game ${g.playerCount - g.players.length === 1 ? 'isn\'t' : 'aren\'t'} on your friends list.</p>` : ''}
+      </details>`;
+    }).join('') : `<p class="muted">${libraryScope === 'all' ? 'No games have finished yet.' : 'No finished games yet — once a game\'s end date passes, it moves here.'}</p>`}</div>
+    <p class="muted" id="libNone" hidden>No archives match that search.</p>`;
+  panel.querySelectorAll('[data-scope]').forEach((b) => (b.onclick = () => { libraryScope = b.dataset.scope; renderLibrary(panel, fr); }));
+  $('#libSearch', panel).oninput = (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    let shown = 0;
+    panel.querySelectorAll('.archive').forEach((d) => { const hit = !q || d.dataset.search.includes(q); d.hidden = !hit; shown += hit; });
+    $('#libNone', panel).hidden = !games.length || shown > 0;
+  };
 }
 
 function renderFriends(panel, fr) {
@@ -608,13 +694,24 @@ async function renderGame(id) {
 }
 
 // The button beside another reader in the list: add, accept, pending, or already friends.
+// Each state has a full label and a one-character compact label; fitReaders() swaps to the compact one
+// on any row where the name no longer fits beside the shelf.
 function friendButton(p) {
   const has = (list) => list.some((u) => u.id === p.id);
-  if (has(friendState.friends)) return '<span class="stamp active friend-btn" title="Friends">Friend</span>';
-  if (has(friendState.incoming)) return `<button class="btn green sm friend-btn" data-befriend="${esc(p.id)}">Accept</button>`;
-  if (has(friendState.outgoing)) return '<span class="muted small friend-btn">Requested</span>';
-  return `<button class="btn ghost sm friend-btn" data-befriend="${esc(p.id)}" title="Send a friend request">+ Friend</button>`;
+  const lbl = (full, short) => `<span class="full">${full}</span><span class="short" aria-hidden="true">${short}</span>`;
+  if (has(friendState.friends)) return `<span class="stamp active friend-btn" title="Friend">${lbl('Friend', '★')}</span>`;
+  if (has(friendState.incoming)) return `<button class="btn green sm friend-btn" data-befriend="${esc(p.id)}" title="Accept friend request" aria-label="Accept friend request">${lbl('Accept', '✓')}</button>`;
+  if (has(friendState.outgoing)) return `<span class="muted small friend-btn" title="Friend request sent">${lbl('Requested', '…')}</span>`;
+  return `<button class="btn ghost sm friend-btn" data-befriend="${esc(p.id)}" title="Send a friend request" aria-label="Send a friend request">${lbl('+ Friend', '+')}</button>`;
 }
+function fitReaders() {
+  document.querySelectorAll('.players li').forEach((li) => {
+    li.classList.remove('compact');
+    const name = li.querySelector('.pname');
+    if (li.querySelector('.friend-btn') && name && name.scrollWidth > name.clientWidth + 1) li.classList.add('compact');
+  });
+}
+window.addEventListener('resize', fitReaders);
 
 function openInvite() {
   const invitable = friendState.friends.filter((f) => !game.players.some((p) => p.id === f.id));
@@ -682,8 +779,8 @@ function drawGame() {
         <h3>Readers</h3>
         <ul class="players">${ranked.map((p, i) => `<li class="${p.id === me.id ? 'me' : ''}">
           <span class="rank">${i + 1}</span>
-          <span class="pname">${esc(p.username)}${p.id === me.id ? ' (you)' : ''}<small>${p.read} read · ${p.planned} planned</small></span>
-          <span class="shelf-count" title="${p.shelves} shelves (bingos)">${miniBooks(p.shelves)}${p.shelves}</span>
+          <span class="pname" title="${esc(p.username)}">${esc(p.username)}${p.id === me.id ? ' (you)' : ''}<small>${p.read} read · ${p.planned} planned</small></span>
+          <span class="shelf-count" title="${p.shelves} shelves (bingos)">${miniBooks(p.shelves, p.id)}${p.shelves}</span>
           ${mine && p.id !== me.id ? friendButton(p) : ''}
         </li>`).join('')}</ul>
         <p class="muted small" style="margin:8px 0 0">A <b>shelf</b> is a full row, column or diagonal of books read.</p>
@@ -694,6 +791,7 @@ function drawGame() {
     <div class="others-grid">${others.map(otherHTML).join('')}</div></section>` : ''}`;
 
   if (mine) $('#board').querySelectorAll('.tile').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
+  fitReaders();
   app.querySelectorAll('.invite-btn').forEach((b) => (b.onclick = openInvite));
   app.querySelectorAll('[data-befriend]').forEach((b) => (b.onclick = async () => {
     try {
@@ -729,12 +827,12 @@ function boardHTML(player) {
   }).join('');
 }
 
-function otherHTML(p) {
+function otherHTML(p, tiles = game.tiles, tag = '') {
   const lit = shelfPositions(p);
   return `<article class="paper other">
-    <header><b>${esc(p.username)}</b><span class="shelf-count" style="font-size:18px">${miniBooks(p.shelves)}${p.shelves}</span></header>
+    <header><b>${esc(p.username)}${tag}</b><span class="shelf-count" style="font-size:18px">${miniBooks(p.shelves, p.id)}${p.shelves}</span></header>
     <div class="mini-board">${p.order.map((tileId, pos) => {
-      const sq = p.squares[tileId]; const tile = game.tiles[tileId];
+      const sq = p.squares[tileId]; const tile = tiles[tileId];
       const tip = `${tile.text}${sq ? ` — ${sq.status}: ${sq.book.title}${sq.book.author ? ' by ' + sq.book.author : ''}` : ''}`;
       const cls = [sq?.status === 'planned' ? 'planned' : '', lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
       const inner = sq ? (sq.book.cover ? `<img src="${esc(sq.book.cover)}" alt="" loading="lazy">` : `<span class="noimg">${esc(sq.book.title)}</span>`) : '';

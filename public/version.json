@@ -1,6 +1,17 @@
 {
-  "version": "v0.0.0.2",
+  "version": "v0.0.0.3",
   "history": [
+    {
+      "version": "v0.0.0.3",
+      "date": "2026-11-07",
+      "notes": [
+        "New Library tab: every finished game you played, with your card and your friends' cards",
+        "Gamemasters can switch the Library to All archives to see every finished game and every card",
+        "Search the Library by game or reader name",
+        "Readers list: the friend button shrinks to a single symbol when a long shelf would cut off the name",
+        "Shelf icons use 12 distinct books, in a different order for each reader"
+      ]
+    },
     {
       "version": "v0.0.0.2",
       "date": "2026-11-07",

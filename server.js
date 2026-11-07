@@ -121,8 +121,8 @@ function publicUser(u) {
 function isMember(g, u) { return !!g.players[u.id]; }
 function canView(g, u) { return isMember(g, u) || u.role === 'master'; }
 
-function gameView(g, u) {
-  const players = Object.entries(g.players).map(([uid, p]) => ({
+function playerViews(g) {
+  return Object.entries(g.players).map(([uid, p]) => ({
     id: uid,
     username: db.users[uid]?.username || '(removed)',
     order: p.order,
@@ -131,6 +131,9 @@ function gameView(g, u) {
     read: Object.values(p.squares).filter((s) => s.status === 'read').length,
     planned: Object.values(p.squares).filter((s) => s.status === 'planned').length,
   }));
+}
+function gameView(g, u) {
+  const players = playerViews(g);
   return {
     id: g.id, name: g.name, start: g.start, end: g.end, status: gameStatus(g),
     creatorId: g.creatorId, creator: db.users[g.creatorId]?.username || '(removed)',
@@ -376,6 +379,24 @@ async function api(req, res, url) {
     db.invites = db.invites.filter((i) => i.gameId !== g.id);
     save();
     return send(res, 200, { ok: true });
+  }
+
+  // --- library: finished games. Readers see the ones they played, with their own and their friends' cards;
+  // Gamemasters can ask for scope=all to see every finished game with every card.
+  if (route === 'GET /library') {
+    need();
+    const all = url.searchParams.get('scope') === 'all';
+    if (all && me.role === 'player') fail(403, 'Gamemasters only');
+    const ended = Object.values(db.games).filter((g) => gameStatus(g) === 'ended' && (all || g.players[me.id]))
+      .sort((a, b) => b.end.localeCompare(a.end) || b.createdAt - a.createdAt);
+    return send(res, 200, { games: ended.map((g) => {
+      const everyone = playerViews(g);
+      const players = all ? everyone : everyone.filter((p) => p.id === me.id || me.friends.includes(p.id));
+      return { id: g.id, name: g.name, start: g.start, end: g.end, creator: db.users[g.creatorId]?.username || '(removed)',
+        tiles: g.tiles, playerCount: everyone.length, players,
+        topShelves: Math.max(0, ...everyone.map((p) => p.shelves)),
+        leaders: everyone.filter((p) => p.shelves > 0 && p.shelves === Math.max(...everyone.map((q) => q.shelves))).map((p) => p.username) };
+    }) });
   }
 
   // --- friends: you can befriend anyone who shares a game with you; they accept the request ---

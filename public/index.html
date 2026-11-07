@@ -91,7 +91,14 @@ body.auth-mode header.top { --s: 1; flex-direction: column; align-items: center;
 }
 .plank::after { content: ''; display: block; height: 5px; margin: calc(16px * var(--s)) 10px 0; background: rgba(0,0,0,.35); filter: blur(4px); }
 
-nav.userbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-bottom: 10px; color: var(--paper-2); font-size: 16px; }
+nav.userbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; padding-bottom: 10px; color: var(--paper-2); font-size: 16px; }
+/* The row of buttons scrolls sideways inside itself when the screen is too narrow, so it never widens the page. */
+nav.userbar .navlinks {
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: rgba(232,207,143,.4) transparent;
+}
+nav.userbar .navlinks > * { flex: none; white-space: nowrap; }
+nav.userbar .navlinks .btn:focus-visible { outline-offset: -3px; } /* inside the button: the scroller would clip a ring drawn outside */
 .badge { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 9px; background: var(--oxblood); color: var(--paper); font-family: var(--serif); font-size: 13px; line-height: 18px; text-align: center; }
 .invite-strip { margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--paper-edge); border-left: 4px solid var(--oxblood); background: #fffaf0; border-radius: 3px; }
 .invite-strip .list li { border-bottom: 0; }
@@ -335,6 +342,13 @@ aside .paper + .paper { margin-top: 18px; }
   .tile .flag { font-size: 8px; top: 3px; right: 3px; padding: 0 3px; }
   .others-grid { grid-template-columns: 1fr; }
   .book-detail { flex-direction: column; }
+  /* Too many tabs for the screen? The row scrolls sideways inside itself instead of widening the whole page. */
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: rgba(232,207,143,.4) transparent; }
+  .tabs button { flex: none; white-space: nowrap; }
+  .tabs button:focus-visible { outline-offset: -3px; } /* inside the button: the scroller would clip a ring drawn outside */
+}
+@media (max-width: 340px) {
+  body.auth-mode header.top { --s: .54; } /* the sign-in title is a few pixels too wide for 320px screens */
 }
 </style>
 </head>
@@ -464,12 +478,14 @@ function renderUserbar() {
   const bar = $('#userbar');
   if (!me) { bar.hidden = true; bar.innerHTML = ''; return; }
   bar.hidden = false;
-  const role = me.isMaster ? 'Master' : me.isKeeper ? 'Keeper' : me.isGM ? 'Gamemaster' : '';
+  const role = me.isMaster ? 'Master' : me.isKeeper ? 'Keeper' : me.isGM ? 'GM' : '';
   bar.innerHTML = `<span class="who">Reading as <b>${esc(me.username)}</b>${role ? `<span class="role">${role}</span>` : ''}</span>
-    <a class="btn ghost sm" href="#/">Games</a>
-    ${me.isGM ? '<a class="btn ghost sm" href="#/gm">Gamemaster</a>' : ''}
-    <button class="btn ghost sm" id="chpw">Password</button>
-    <button class="btn ghost sm" id="logout">Sign out</button>`;
+    <div class="navlinks">
+      <a class="btn ghost sm" href="#/">Games</a>
+      ${me.isGM ? '<a class="btn ghost sm" href="#/gm">GM</a>' : ''}
+      <button class="btn ghost sm" id="chpw">Password</button>
+      <button class="btn ghost sm" id="logout">Sign out</button>
+    </div>`;
   $('#chpw').onclick = openChangePassword;
   $('#logout').onclick = async () => { await api('/logout', { method: 'POST' }).catch(() => {}); me = null; renderUserbar(); location.hash = '#/login'; };
 }
@@ -499,7 +515,7 @@ function tempPassword() {
   return `${pick()}-${pick()}-${100 + (crypto.getRandomValues(new Uint32Array(1))[0] % 900)}`;
 }
 function openResetPassword(id, name) {
-  const modal = openModal(`<p class="eyebrow">Gamemaster</p><h2>Reset ${esc(name)}'s password</h2>
+  const modal = openModal(`<p class="eyebrow">GM</p><h2>Reset ${esc(name)}'s password</h2>
     <p class="muted small">They'll be signed out everywhere. Give them the new password so they can sign in, then they can change it under <b>Password</b>.</p>
     <form id="rpForm">
       <div class="field"><label for="rpw">New password</label>
@@ -577,6 +593,9 @@ async function renderLobby(tab) {
     `<button role="tab" aria-selected="${k === tab}" data-tab="${k}">${l}${b}</button>`).join('')}</div>
     <section class="paper tabpanel" id="panel"></section>`;
   app.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => (location.hash = '#/' + b.dataset.tab)));
+  // The bar is rebuilt on every tab change; on a narrow screen it scrolls, so bring the chosen tab back into view.
+  const bar = $('.tabs', app), cur = $('[aria-selected=true]', bar);
+  if (cur) bar.scrollLeft += cur.getBoundingClientRect().left - bar.getBoundingClientRect().left - (bar.clientWidth - cur.offsetWidth) / 2;
   const panel = $('#panel');
   if (tab === 'view') return renderView(panel, invites);
   if (tab === 'create') return renderCreate(panel);
@@ -1010,12 +1029,12 @@ async function renderGM() {
     </section>
     <section class="paper">
       <h2>Readers</h2>
-      <p class="muted small">Gamemasters can promote readers to Gamemaster. Keepers can also reset the passwords of readers and Gamemasters.${me.isMaster ? ' As master you alone can make Keepers, demote, remove accounts, and reset Keeper passwords.' : ''}</p>
-      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isKeeper ? '<span class="stamp keeper">Keeper</span>' : u.isGM ? '<span class="stamp upcoming">Gamemaster</span>' : ''}</span>
-        ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make Gamemaster</button>` : ''}
+      <p class="muted small">GMs can promote readers to GM. Keepers can also reset the passwords of readers and GMs.${me.isMaster ? ' As master you alone can make Keepers, demote, remove accounts, and reset Keeper passwords.' : ''}</p>
+      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isKeeper ? '<span class="stamp keeper">Keeper</span>' : u.isGM ? '<span class="stamp upcoming">GM</span>' : ''}</span>
+        ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make GM</button>` : ''}
         ${me.isMaster && !u.isKeeper ? `<button class="btn sm" data-keeper="${esc(u.id)}">Make Keeper</button>` : ''}
         ${me.isKeeper && (!u.isKeeper || me.isMaster) ? `<button class="btn ghost sm" data-resetpw="${esc(u.id)}" data-name="${esc(u.username)}">Reset password</button>` : ''}
-        ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}" title="${u.isKeeper ? 'Back to Gamemaster' : 'Back to reader'}">Demote</button>` : ''}
+        ${me.isMaster && u.isGM && !u.isMaster ? `<button class="btn ghost sm" data-demote="${esc(u.id)}" title="${u.isKeeper ? 'Back to GM' : 'Back to reader'}">Demote</button>` : ''}
         ${me.isMaster && !u.isMaster ? `<button class="btn danger sm" data-remove="${esc(u.id)}" data-name="${esc(u.username)}">Remove</button>` : ''}
       </li>`).join('')}</ul>
     </section>

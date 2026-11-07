@@ -1,6 +1,15 @@
 {
-  "version": "v1.0.0.0",
+  "version": "v1.0.0.1",
   "history": [
+    {
+      "version": "v1.0.0.1",
+      "date": "2026-11-07",
+      "notes": [
+        "Gamemaster is now written GM on the Gamemaster screen and in the header (the GM link, the GM badge, Make GM), to save room on small screens",
+        "On narrow screens the header buttons and the tab bar (View games, Create a game, and the rest) now scroll sideways inside themselves instead of making the whole page scroll sideways",
+        "The sign-in title now fits the narrowest phone screens"
+      ]
+    },
     {
       "version": "v1.0.0.0",
       "date": "2026-11-07",

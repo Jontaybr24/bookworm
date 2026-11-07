@@ -328,7 +328,9 @@ aside .paper + .paper { margin-top: 18px; }
 @media (max-width: 1000px) {
   .game-layout { grid-template-columns: 1fr; }
   .others-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .gm-grid { grid-template-columns: 1fr; }
+  /* minmax(0, 1fr), not 1fr: a column can't grow to fit its widest row (a reader with five buttons), so the page doesn't widen. */
+  .gm-grid { grid-template-columns: minmax(0, 1fr); }
+  .gm-grid .list li { flex-wrap: wrap; row-gap: 6px; }
 }
 @media (max-width: 640px) {
   body { font-size: 17px; }
@@ -342,6 +344,8 @@ aside .paper + .paper { margin-top: 18px; }
   .tile .flag { font-size: 8px; top: 3px; right: 3px; padding: 0 3px; }
   .others-grid { grid-template-columns: 1fr; }
   .book-detail { flex-direction: column; }
+  /* A reader can have up to five buttons: the name gets its own line and the buttons wrap beneath it. */
+  .gm-grid .readers li > span { flex-basis: 100%; }
   /* Too many tabs for the screen? The row scrolls sideways inside itself instead of widening the whole page. */
   .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: rgba(232,207,143,.4) transparent; }
   .tabs button { flex: none; white-space: nowrap; }
@@ -949,7 +953,7 @@ function openTile(tileId) {
         ${sq.status === 'planned' ? `<button class="btn green" id="markRead" ${game.status !== 'active' ? 'disabled title="The game has not started yet"' : ''}>I've read it</button>` : ''}
         <button class="btn danger" id="clear">Clear tile</button></div><hr style="border:0;border-top:1px dotted var(--paper-edge);margin:18px 0 8px">`);
     $('#markRead', modal) && ($('#markRead', modal).onclick = () => setSquare(tileId, 'read', sq.book));
-    $('#clear', modal) && ($('#clear', modal).onclick = () => setSquare(tileId, null));
+    $('#clear', modal) && ($('#clear', modal).onclick = () => { if (confirm(`Clear "${sq.book.title}" from this tile?`)) setSquare(tileId, null); });
   }
   if (locked) return;
   const q = $('#q', modal); const results = $('#results', modal); const note = $('#searchNote', modal);
@@ -1030,7 +1034,7 @@ async function renderGM() {
     <section class="paper">
       <h2>Readers</h2>
       <p class="muted small">GMs can promote readers to GM. Keepers can also reset the passwords of readers and GMs.${me.isMaster ? ' As master you alone can make Keepers, demote, remove accounts, and reset Keeper passwords.' : ''}</p>
-      <ul class="list">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isKeeper ? '<span class="stamp keeper">Keeper</span>' : u.isGM ? '<span class="stamp upcoming">GM</span>' : ''}</span>
+      <ul class="list readers">${users.map((u) => `<li><span>${esc(u.username)} ${u.isMaster ? '<span class="stamp active">Master</span>' : u.isKeeper ? '<span class="stamp keeper">Keeper</span>' : u.isGM ? '<span class="stamp upcoming">GM</span>' : ''}</span>
         ${!u.isGM ? `<button class="btn sm" data-promote="${esc(u.id)}">Make GM</button>` : ''}
         ${me.isMaster && !u.isKeeper ? `<button class="btn sm" data-keeper="${esc(u.id)}">Make Keeper</button>` : ''}
         ${me.isKeeper && (!u.isKeeper || me.isMaster) ? `<button class="btn ghost sm" data-resetpw="${esc(u.id)}" data-name="${esc(u.username)}">Reset password</button>` : ''}

@@ -1,6 +1,16 @@
 {
-  "version": "v1.0.0.1",
+  "version": "v1.0.0.2",
   "history": [
+    {
+      "version": "v1.0.0.2",
+      "date": "2026-11-07",
+      "notes": [
+        "Your accounts and games are now backed up automatically: every time the server starts, every hour while anything changes, and just before a game or an account is removed",
+        "Saving is safer, so a crash or power cut in the middle of a save can no longer leave a half-written file",
+        "Clear tile now asks you to confirm before it empties a tile",
+        "The GM screen now fits phone screens: in the Readers list each name has its own line with its buttons wrapped beneath it, so the page no longer scrolls sideways"
+      ]
+    },
     {
       "version": "v1.0.0.1",
       "date": "2026-11-07",

@@ -1,6 +1,13 @@
 {
-  "version": "v0.0.0.0",
+  "version": "v0.0.0.1",
   "history": [
+    {
+      "version": "v0.0.0.1",
+      "date": "2026-11-07",
+      "notes": [
+        "Bookworm title shelf is centered, with the account bar centered beneath it"
+      ]
+    },
     {
       "version": "v0.0.0.0",
       "date": "2026-11-07",

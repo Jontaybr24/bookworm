@@ -1,6 +1,29 @@
 {
-  "version": "v1.0.0.2",
+  "version": "v1.0.1.2",
   "history": [
+    {
+      "version": "v1.0.1.2",
+      "date": "2026-11-12",
+      "notes": [
+        "Fixed the version history so the v1.0.1.1 entry shows correctly"
+      ]
+    },
+    {
+      "version": "v1.0.1.1",
+      "date": "2026-11-12",
+      "notes": [
+        "Bookworm now runs on port 3001 by default"
+      ]
+    },
+    {
+      "version": "v1.0.1.0",
+      "date": "2026-11-12",
+      "notes": [
+        "You can now look at other readers' cards: pick a reader in the Readers list (or press View full card under their small card) to put their card on the big board, read-only; Back to my card brings yours back",
+        "Tap any tile on another reader's card, big or small, to see its category and the book they chose (cover, title, author, year, description, and whether it is read or planned), or \"No book chosen yet\" for an empty tile; close it with the x button, Escape or a tap outside",
+        "The small cards in the Library work the same way: tap a tile to see its category and book"
+      ]
+    },
     {
       "version": "v1.0.0.2",
       "date": "2026-11-07",

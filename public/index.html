@@ -164,7 +164,7 @@ input[type=text], input[type=password], input[type=date], input[type=search], te
   width: 100%; padding: 8px 10px; border-radius: var(--radius);
   border: 1px solid var(--paper-edge); background: #fffaf0; box-shadow: inset 0 1px 2px rgba(0,0,0,.08);
 }
-input:focus, textarea:focus, .btn:focus-visible, .tile:focus-visible { outline: 2px solid var(--oxblood); outline-offset: 2px; }
+input:focus, textarea:focus, .btn:focus-visible, .tile:focus-visible, .mini-board button:focus-visible { outline: 2px solid var(--oxblood); outline-offset: 2px; }
 .field { margin-bottom: 14px; }
 .row { display: flex; gap: 12px; flex-wrap: wrap; }
 .row > .field { flex: 1 1 180px; }
@@ -270,6 +270,15 @@ aside .paper + .paper { margin-top: 18px; }
 .players .pname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .players .pname small { display: block; color: var(--ink-soft); font-size: 14px; }
 .players .me .pname { font-weight: 600; }
+/* The readers list is also a switcher: a row puts that reader's card on the big board. The button is invisible and covers the
+   whole row (a little past it, so the highlight has room); the friend button sits above it so it still works. */
+.players li { position: relative; }
+.players .pick { position: absolute; inset: 0 -6px; padding: 0; border: 0; border-radius: 3px; background: none; cursor: pointer; }
+.players .pick:hover { background: rgba(0,0,0,.05); }
+.players .pick:focus-visible { outline: 2px solid var(--oxblood); outline-offset: -2px; }
+.players li.viewing .pick { background: rgba(201,164,92,.2); box-shadow: inset 3px 0 0 var(--brass); }
+.players button.friend-btn { position: relative; z-index: 1; }
+.viewing-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 8px 12px; border: 1px solid var(--paper-edge); border-left: 4px solid var(--brass); background: #fffaf0; border-radius: 3px; }
 .shelf-count { display: flex; align-items: flex-end; gap: 6px; font-family: var(--display); font-weight: 700; font-size: 22px; }
 .mini-books { display: inline-flex; align-items: flex-end; gap: 1px; height: 20px; }
 .mini-books i { display: block; width: 5px; border-radius: 1px 1px 0 0; }
@@ -281,8 +290,12 @@ aside .paper + .paper { margin-top: 18px; }
 .other header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
 .other header b { font-family: var(--display); font-size: 20px; }
 .mini-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
-.mini-board div { position: relative; aspect-ratio: 3 / 4; border-radius: 2px; overflow: hidden; background: #e4d6b5; border: 1px solid var(--paper-edge); }
-.mini-board img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Each small tile is a button, so tapping it opens a read-only look at that tile; the free space is a plain box. */
+.mini-board > * { position: relative; aspect-ratio: 3 / 4; border-radius: 2px; overflow: hidden; background: #e4d6b5; border: 1px solid var(--paper-edge); padding: 0; }
+.mini-board button { cursor: pointer; }
+.mini-board button:hover { filter: brightness(1.1); }
+.mini-board img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.mini-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 8px 0 0; }
 .mini-board .noimg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 2px; background: var(--navy); color: var(--paper); font-size: 9px; line-height: 1.05; text-align: center; overflow: hidden; }
 .mini-board .planned { border-style: dashed; border-color: var(--ink-soft); }
 .mini-board .planned img, .mini-board .planned .noimg { opacity: .35; filter: grayscale(.6); }
@@ -632,7 +645,7 @@ async function renderLibrary(panel, fr) {
       const mineCard = g.players.find((p) => p.id === me.id);
       const rest = g.players.filter((p) => p.id !== me.id);
       const search = [g.name, g.creator, ...g.players.map((p) => p.username)].join(' ').toLowerCase();
-      return `<details class="archive" data-search="${esc(search)}">
+      return `<details class="archive" data-gid="${esc(g.id)}" data-search="${esc(search)}">
         <summary>
           <span class="a-name">${esc(g.name)}</span>
           <span class="muted small">${fmtDate(g.start)} – ${fmtDate(g.end)} · ${g.playerCount} reader${g.playerCount === 1 ? '' : 's'}
@@ -648,6 +661,10 @@ async function renderLibrary(panel, fr) {
     }).join('') : `<p class="muted">${libraryScope === 'all' ? 'No games have finished yet.' : 'No finished games yet — once a game\'s end date passes, it moves here.'}</p>`}</div>
     <p class="muted" id="libNone" hidden>No archives match that search.</p>`;
   panel.querySelectorAll('[data-scope]').forEach((b) => (b.onclick = () => { libraryScope = b.dataset.scope; renderLibrary(panel, fr); }));
+  wireMiniBoards(panel, (board) => {
+    const g = games.find((x) => x.id === board.closest('.archive').dataset.gid);
+    return g && { player: g.players.find((p) => p.id === board.dataset.pid), tiles: g.tiles };
+  });
   $('#libSearch', panel).oninput = (e) => {
     const q = e.target.value.trim().toLowerCase();
     let shown = 0;
@@ -768,8 +785,10 @@ function renderJoin(panel) {
 
 // ---------- game ----------
 let game = null;
+let viewing = null; // id of the reader whose card is on the big board (read-only), or null for your own
 let friendState = { friends: [], incoming: [], outgoing: [] };
 async function renderGame(id) {
+  viewing = null;
   app.innerHTML = '<p style="color:var(--paper)">Opening the book…</p>';
   try { [{ game }, friendState] = await Promise.all([api('/games/' + id), loadFriends()]); }
   catch (err) { app.innerHTML = `<section class="paper"><h2>Game not found</h2><p>${esc(err.message)}</p><a class="btn" href="#/">Back to games</a></section>`; return; }
@@ -828,9 +847,21 @@ function openInvite() {
   };
 }
 
+// Puts a reader's card on the big board (read-only), or yours again when id is null.
+function showCard(id) {
+  viewing = id && id !== me.id ? id : null;
+  drawGame();
+  $(`.players [data-view="${id || me.id}"]`)?.focus({ preventScroll: true }); // the redraw dropped the focus
+  $('.game-head').scrollIntoView({ block: 'nearest' }); // from the readers or cards far down a phone's page, bring the board into view
+}
+
 function drawGame() {
   const mine = game.players.find((p) => p.id === me.id);
   const others = game.players.filter((p) => p.id !== me.id);
+  // The big board is yours, or (read-only) another reader's once you've picked them; if they've left since, it's yours again.
+  const shown = others.find((p) => p.id === viewing) || null;
+  if (!shown) viewing = null;
+  const card = shown || mine;
   const ranked = [...game.players].sort((a, b) => b.shelves - a.shelves || b.read - a.read || a.username.localeCompare(b.username));
   const canDelete = game.creatorId === me.id || me.isMaster;
   const statusNote = { active: 'In progress', upcoming: `Starts ${fmtDate(game.start)} — plan your picks`, ended: 'This game has ended' }[game.status];
@@ -847,9 +878,11 @@ function drawGame() {
           ${canDelete ? '<button class="btn danger sm" id="delete">Delete game</button>' : ''}
         </div>
       </div>
-      ${mine ? `<div class="board" id="board">${boardHTML(mine)}</div>
+      ${shown ? `<div class="viewing-bar"><span>Viewing <b>${esc(shown.username)}</b>'s card · read-only</span>
+        <button class="btn ghost sm" id="backToMine">${mine ? 'Back to my card' : 'Close'}</button></div>` : ''}
+      ${card ? `<div class="board" id="board">${boardHTML(card)}</div>
         <div class="legend"><span class="l-read">Read</span><span class="l-plan">Planned</span><span class="l-shelf">Part of a shelf (bingo)</span></div>`
-        : '<p class="muted">You are viewing this game as the master account and are not playing in it.</p>'}
+        : `<p class="muted">You are viewing this game as the master account and are not playing in it.${others.length ? ' Pick a reader to see their card.' : ''}</p>`}
       ${mine && !others.length && game.status !== 'ended' ? `<div class="empty-invite">
         <h3>It's just you so far</h3>
         <p class="muted small" style="margin-top:0">Invite friends to this game, or share the code <b>${esc(game.code)}</b>.</p>
@@ -864,20 +897,26 @@ function drawGame() {
       </div>
       <div class="paper">
         <h3>Readers</h3>
-        <ul class="players">${ranked.map((p, i) => `<li class="${p.id === me.id ? 'me' : ''}">
+        <ul class="players">${ranked.map((p, i) => `<li class="${[p.id === me.id && 'me', p.id === card?.id && 'viewing'].filter(Boolean).join(' ')}">
+          <button type="button" class="pick" data-view="${esc(p.id)}" title="See ${p.id === me.id ? 'your' : esc(p.username) + '&#39;s'} card" aria-label="See ${p.id === me.id ? 'your' : esc(p.username) + '&#39;s'} card"${p.id === card?.id ? ' aria-current="true"' : ''}></button>
           <span class="rank">${i + 1}</span>
           <span class="pname" title="${esc(p.username)}">${esc(p.username)}${p.id === me.id ? ' (you)' : ''}<small>${p.read} read · ${p.planned} planned</small></span>
           <span class="shelf-count" title="${p.shelves} shelves (bingos)">${miniBooks(p.shelves, p.id)}${p.shelves}</span>
           ${mine && p.id !== me.id ? friendButton(p) : ''}
         </li>`).join('')}</ul>
-        <p class="muted small" style="margin:8px 0 0">A <b>shelf</b> is a full row, column or diagonal of books read.</p>
+        <p class="muted small" style="margin:8px 0 0">${others.length ? 'Pick a reader to see their card. ' : ''}A <b>shelf</b> is a full row, column or diagonal of books read.</p>
       </div>
     </aside>
   </div>
   ${others.length ? `<section class="others"><h3>Other readers' cards</h3>
-    <div class="others-grid">${others.map((p) => otherHTML(p)).join('')}</div></section>` : ''}`;
+    <div class="others-grid">${others.map((p) => otherHTML(p, game.tiles, '', p.id !== viewing)).join('')}</div></section>` : ''}`;
 
-  if (mine) $('#board').querySelectorAll('.tile[data-tile]').forEach((t) => (t.onclick = () => openTile(Number(t.dataset.tile))));
+  // Your own tiles open the editor; another reader's open a read-only look (never the editor, which would change your card).
+  if (card) $('#board').querySelectorAll('.tile[data-tile]').forEach((t) => (t.onclick = () => (shown
+    ? openCardTile(shown, game.tiles, Number(t.dataset.tile), t) : openTile(Number(t.dataset.tile)))));
+  wireMiniBoards(app, (board) => ({ player: game.players.find((p) => p.id === board.dataset.pid), tiles: game.tiles }));
+  app.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => showCard(b.dataset.view)));
+  $('#backToMine') && ($('#backToMine').onclick = () => showCard(null));
   fitReaders();
   app.querySelectorAll('.invite-btn').forEach((b) => (b.onclick = openInvite));
   app.querySelectorAll('[data-befriend]').forEach((b) => (b.onclick = async () => {
@@ -915,20 +954,45 @@ function boardHTML(player) {
   }).join('');
 }
 
-function otherHTML(p, tiles = game.tiles, tag = '') {
+// A reader's small card. Its tiles are buttons (see wireMiniBoards); canOpen adds a link that puts the card on the big board.
+function otherHTML(p, tiles = game.tiles, tag = '', canOpen = false) {
   const lit = shelfPositions(p);
   return `<article class="paper other">
     <header><b>${esc(p.username)}${tag}</b><span class="shelf-count" style="font-size:18px">${miniBooks(p.shelves, p.id)}${p.shelves}</span></header>
-    <div class="mini-board">${p.order.map((tileId, pos) => {
+    <div class="mini-board" data-pid="${esc(p.id)}">${p.order.map((tileId, pos) => {
       if (tileId === null) return `<div class="free${lit.has(pos) ? ' shelf' : ''}" title="Free space"><span class="noimg">FREE</span></div>`;
       const sq = p.squares[tileId]; const tile = tiles[tileId];
       const tip = `${tile.text}${sq ? ` — ${sq.status}: ${sq.book.title}${sq.book.author ? ' by ' + sq.book.author : ''}` : ''}`;
       const cls = [sq?.status === 'planned' ? 'planned' : '', lit.has(pos) ? 'shelf' : ''].filter(Boolean).join(' ');
       const inner = sq ? (sq.book.cover ? `<img src="${esc(sq.book.cover)}" alt="" loading="lazy">` : `<span class="noimg">${esc(sq.book.title)}</span>`) : '';
-      return `<div class="${cls}" title="${esc(tip)}">${inner}</div>`;
+      return `<button type="button" class="${cls}" data-tile="${tileId}" title="${esc(tip)}" aria-label="${esc(tip)}">${inner}</button>`;
     }).join('')}</div>
-    <p class="muted small" style="margin:8px 0 0">${p.read} read · ${p.planned} planned</p>
+    <div class="mini-foot"><span class="muted small">${p.read} read · ${p.planned} planned</span>
+      ${canOpen ? `<button type="button" class="linkish small" data-view="${esc(p.id)}">View full card</button>` : ''}</div>
   </article>`;
+}
+
+// Makes the tiles of every small card under root open a read-only look at that tile. lookup(board) says whose card a
+// .mini-board is, as { player, tiles }: the game page and each Library archive keep their cards in different places.
+function wireMiniBoards(root, lookup) {
+  root.querySelectorAll('.mini-board').forEach((board) => (board.onclick = (e) => {
+    const cell = e.target.closest('button[data-tile]');
+    const found = cell && lookup(board);
+    if (found?.player) openCardTile(found.player, found.tiles, Number(cell.dataset.tile), cell);
+  }));
+}
+
+// A tile on a card you can only look at (another reader's, or any card in the Library): its category and the book chosen
+// for it. Nothing here can change a card; opener gets the focus back when the dialog closes.
+function openCardTile(p, tiles, tileId, opener) {
+  const tile = tiles[tileId];
+  if (!tile) return;
+  const sq = p.squares[tileId];
+  const modal = openModal(`<p class="eyebrow">${p.id === me.id ? 'Your card' : esc(p.username) + '&#39;s card'} · ${tile.custom ? 'Custom category' : 'Category'}</p>
+    <h2>${esc(tile.text)}</h2>
+    ${sq ? bookDetailHTML(sq.book, sq.status === 'read' ? 'Read' : 'Planned') : '<p class="muted">No book chosen yet.</p>'}`,
+    { onClose: () => { if (opener?.isConnected) opener.focus(); } });
+  $('.close', modal).focus();
 }
 
 // The tile dialog: shows what's on the tile, and a search to pick a book to read or plan.

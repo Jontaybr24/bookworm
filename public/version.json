@@ -1,10 +1,19 @@
 {
-  "version": "v1.0.1.1",
+  "version": "v1.0.1.2",
   "history": [
+    {
+      "version": "v1.0.1.2",
+      "date": "2026-11-12",
+      "notes": [
+        "Fixed the version history so the v1.0.1.1 entry shows correctly"
+      ]
+    },
     {
       "version": "v1.0.1.1",
       "date": "2026-11-12",
-      "notes": "Bookworm now runs on port 3001 by default"
+      "notes": [
+        "Bookworm now runs on port 3001 by default"
+      ]
     },
     {
       "version": "v1.0.1.0",
